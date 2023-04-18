@@ -1,4 +1,4 @@
-module github.com/jimsnab/lane
+module github.com/jimsnab/go-lane
 
 go 1.19
 
