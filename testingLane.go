@@ -33,6 +33,7 @@ type (
 
 	TestingLane interface {
 		Lane
+		EventsToString() string
 		VerifyEvents(eventList []*laneEvent) (match bool)
 		VerifyEventText(eventText string) (match bool)
 	}
@@ -98,6 +99,21 @@ func (tl *testingLane) VerifyEventText(eventText string) (match bool) {
 	}
 
 	return tl.VerifyEvents(eventList)
+}
+
+func (tl *testingLane) EventsToString() string {
+	var sb strings.Builder
+
+	for _,e := range tl.Events {
+		if sb.Len() > 0 {
+			sb.WriteRune('\n')
+		}
+		sb.WriteString(e.Level)
+		sb.WriteRune('\t')
+		sb.WriteString(e.Message)
+	}
+	
+	return sb.String()
 }
 
 func (tl *testingLane) recordLaneEvent(level LaneLogLevel, levelText string, format *string, args ...any) {

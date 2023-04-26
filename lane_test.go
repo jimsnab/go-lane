@@ -126,6 +126,10 @@ ERROR	testing 1213`
 	if !tl.VerifyEventText(expected) {
 		t.Errorf("Test events don't match")
 	}
+
+	if tl.EventsToString() != expected {
+		t.Errorf("Test event string doesn't match")
+	}
 }
 
 func TestLaneVerifyTextTrace(t *testing.T) {
@@ -160,6 +164,10 @@ ERROR	testing 1213`
 	if !tl.VerifyEventText(expected) {
 		t.Errorf("Test events don't match")
 	}
+
+	if tl.EventsToString() != expected {
+		t.Errorf("Test event string doesn't match")
+	}
 }
 
 func TestLaneVerifyTextDebug(t *testing.T) {
@@ -192,6 +200,10 @@ ERROR	testing 1213`
 	if !tl.VerifyEventText(expected) {
 		t.Errorf("Test events don't match")
 	}
+
+	if tl.EventsToString() != expected {
+		t.Errorf("Test event string doesn't match")
+	}
 }
 
 func TestLaneVerifyTextInfo(t *testing.T) {
@@ -222,6 +234,10 @@ ERROR	testing 1213`
 	if !tl.VerifyEventText(expected) {
 		t.Errorf("Test events don't match")
 	}
+
+	if tl.EventsToString() != expected {
+		t.Errorf("Test event string doesn't match")
+	}
 }
 
 func TestLaneVerifyTextWarn(t *testing.T) {
@@ -250,6 +266,10 @@ ERROR	testing 1213`
 	if !tl.VerifyEventText(expected) {
 		t.Errorf("Test events don't match")
 	}
+
+	if tl.EventsToString() != expected {
+		t.Errorf("Test event string doesn't match")
+	}
 }
 
 func TestLaneVerifyTextError(t *testing.T) {
@@ -276,6 +296,10 @@ func TestLaneVerifyTextError(t *testing.T) {
 
 	if !tl.VerifyEventText(expected) {
 		t.Errorf("Test events don't match")
+	}
+
+	if tl.EventsToString() != expected {
+		t.Errorf("Test event string doesn't match")
 	}
 }
 
