@@ -94,6 +94,164 @@ func TestLaneInheritLevel(t *testing.T) {
 	}
 }
 
+func TestLaneWithCancel(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+
+	level := tl.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	tl2, cancel := tl.DeriveWithCancel()
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-tl2.Done()
+		isDone <- struct{}{}
+	}()
+
+	level = tl2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	time.Sleep(time.Millisecond)
+	cancel()
+
+	<-isDone
+}
+
+func TestLaneWithTimeoutCancel(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+
+	level := tl.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	tl2, cancel := tl.DeriveWithTimeout(time.Hour)
+
+	isDone := make(chan struct{})
+
+	start := time.Now()
+	go func() {
+		<-tl2.Done()
+		isDone <- struct{}{}
+	}()
+
+	level = tl2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	time.Sleep(time.Millisecond)
+	cancel()
+
+	<-isDone
+
+	delta := time.Since(start)
+	if delta.Milliseconds() > 60 {
+		t.Error("Timeout too long")
+	}
+}
+
+func TestLaneWithTimeoutExpire(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+
+	level := tl.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	tl2, _ := tl.DeriveWithTimeout(time.Millisecond)
+
+	isDone := make(chan struct{})
+
+	start := time.Now()
+	go func() {
+		<-tl2.Done()
+		isDone <- struct{}{}
+	}()
+
+	level = tl2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	<-isDone
+
+	delta := time.Since(start)
+	if delta.Milliseconds() > 60 {
+		t.Error("Timeout too long")
+	}
+}
+
+func TestLaneWithDeadlineCancel(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+
+	level := tl.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	start := time.Now()
+	tl2, cancel := tl.DeriveWithDeadline(start.Add(time.Minute))
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-tl2.Done()
+		isDone <- struct{}{}
+	}()
+
+	level = tl2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	time.Sleep(time.Millisecond)
+	cancel()
+
+	<-isDone
+
+	delta := time.Since(start)
+	if delta.Milliseconds() > 60 {
+		t.Error("Timeout too long")
+	}
+}
+
+func TestLaneWithDeadlineExpire(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+
+	level := tl.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	start := time.Now()
+	tl2, _ := tl.DeriveWithDeadline(start.Add(time.Millisecond * 10))
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-tl2.Done()
+		isDone <- struct{}{}
+	}()
+
+	level = tl2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	<-isDone
+
+	delta := time.Since(start)
+	if delta.Milliseconds() > 60 {
+		t.Error("Timeout too long")
+	}
+}
+
 func TestLaneVerifyText(t *testing.T) {
 	tl := NewTestingLane(context.Background())
 
@@ -303,6 +461,96 @@ func TestLaneVerifyTextError(t *testing.T) {
 	}
 }
 
+func TestLaneVerifyCancel(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+	l, _ := tl.DeriveWithCancel()
+
+	l.Trace("test of trace")
+
+	expected := "TRACE\ttest of trace"
+
+	tl2, ok := l.(TestingLane)
+	if !ok {
+		t.Fatal("lane not a testing lane")
+	}
+
+	if !tl2.VerifyEventText(expected) {
+		t.Errorf("Test events don't match")
+	}
+
+	if tl2.EventsToString() != expected {
+		t.Errorf("Test event string doesn't match")
+	}
+
+	if tl.LaneId() == l.LaneId() {
+		t.Errorf("Lane IDs match")
+	}
+
+	if len(l.LaneId()) < 6 {
+		t.Errorf("insufficient lane id")
+	}
+}
+
+func TestLaneVerifyTimeout(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+	l, _ := tl.DeriveWithTimeout(time.Hour)
+
+	l.Trace("test of trace")
+
+	expected := "TRACE\ttest of trace"
+
+	tl2, ok := l.(TestingLane)
+	if !ok {
+		t.Fatal("lane not a testing lane")
+	}
+
+	if !tl2.VerifyEventText(expected) {
+		t.Errorf("Test events don't match")
+	}
+
+	if tl2.EventsToString() != expected {
+		t.Errorf("Test event string doesn't match")
+	}
+
+	if tl.LaneId() == l.LaneId() {
+		t.Errorf("Lane IDs match")
+	}
+
+	if len(l.LaneId()) < 6 {
+		t.Errorf("insufficient lane id")
+	}
+}
+
+func TestLaneVerifyDeadline(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+	l, _ := tl.DeriveWithDeadline(time.Now().Add(time.Hour))
+
+	l.Trace("test of trace")
+
+	expected := "TRACE\ttest of trace"
+
+	tl2, ok := l.(TestingLane)
+	if !ok {
+		t.Fatal("lane not a testing lane")
+	}
+
+	if !tl2.VerifyEventText(expected) {
+		t.Errorf("Test events don't match")
+	}
+
+	if tl2.EventsToString() != expected {
+		t.Errorf("Test event string doesn't match")
+	}
+
+	if tl.LaneId() == l.LaneId() {
+		t.Errorf("Lane IDs match")
+	}
+
+	if len(l.LaneId()) < 6 {
+		t.Errorf("insufficient lane id")
+	}
+}
+
 func TestLaneWrappedLogger(t *testing.T) {
 	tl := NewTestingLane(context.Background())
 
@@ -391,6 +639,164 @@ func TestLogLaneInheritLevel(t *testing.T) {
 	level = ll2.SetLogLevel(LogLevelDebug)
 	if level != LogLevelFatal {
 		t.Error("Log level 2 was not fatal")
+	}
+}
+
+func TestLogLaneWithCancel(t *testing.T) {
+	ll := NewLogLane(context.Background())
+
+	level := ll.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	ll2, cancel := ll.DeriveWithCancel()
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-ll2.Done()
+		isDone <- struct{}{}
+	}()
+
+	level = ll2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	time.Sleep(time.Millisecond)
+	cancel()
+
+	<-isDone
+}
+
+func TestLogLaneWithTimeoutCancel(t *testing.T) {
+	ll := NewLogLane(context.Background())
+
+	level := ll.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	ll2, cancel := ll.DeriveWithTimeout(time.Hour)
+
+	isDone := make(chan struct{})
+
+	start := time.Now()
+	go func() {
+		<-ll2.Done()
+		isDone <- struct{}{}
+	}()
+
+	level = ll2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	time.Sleep(time.Millisecond)
+	cancel()
+
+	<-isDone
+
+	delta := time.Since(start)
+	if delta.Milliseconds() > 60 {
+		t.Error("Timeout too long")
+	}
+}
+
+func TestLogLaneWithTimeoutExpire(t *testing.T) {
+	ll := NewLogLane(context.Background())
+
+	level := ll.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	ll2, _ := ll.DeriveWithTimeout(time.Millisecond)
+
+	isDone := make(chan struct{})
+
+	start := time.Now()
+	go func() {
+		<-ll2.Done()
+		isDone <- struct{}{}
+	}()
+
+	level = ll2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	<-isDone
+
+	delta := time.Since(start)
+	if delta.Milliseconds() > 60 {
+		t.Error("Timeout too long")
+	}
+}
+
+func TestLogLaneWithDeadlineCancel(t *testing.T) {
+	ll := NewLogLane(context.Background())
+
+	level := ll.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	start := time.Now()
+	ll2, cancel := ll.DeriveWithDeadline(start.Add(time.Minute))
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-ll2.Done()
+		isDone <- struct{}{}
+	}()
+
+	level = ll2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	time.Sleep(time.Millisecond)
+	cancel()
+
+	<-isDone
+
+	delta := time.Since(start)
+	if delta.Milliseconds() > 60 {
+		t.Error("Timeout too long")
+	}
+}
+
+func TestLogLaneWithDeadlineExpire(t *testing.T) {
+	ll := NewLogLane(context.Background())
+
+	level := ll.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	start := time.Now()
+	ll2, _ := ll.DeriveWithDeadline(start.Add(time.Millisecond * 10))
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-ll2.Done()
+		isDone <- struct{}{}
+	}()
+
+	level = ll2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	<-isDone
+
+	delta := time.Since(start)
+	if delta.Milliseconds() > 60 {
+		t.Error("Timeout too long")
 	}
 }
 
@@ -625,6 +1031,90 @@ func TestLogLaneVerifyTextFilterFatal(t *testing.T) {
 	verifyLogLaneEvents(t, ll, expected, buf)
 }
 
+func TestLogLaneVerifyCancel(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll := NewLogLane(context.Background())
+	l, _ := ll.DeriveWithCancel()
+
+	l.Trace("test of trace")
+
+	expected := "TRACE {GUID} test of trace"
+
+	ll2, ok := l.(*logLane)
+	if !ok {
+		t.Fatal("lane not a log lane")
+	}
+
+	verifyLogLaneEvents(t, ll2, expected, buf)
+
+	if ll.LaneId() == l.LaneId() {
+		t.Errorf("Lane IDs match")
+	}
+
+	if len(l.LaneId()) < 6 {
+		t.Errorf("insufficient lane id")
+	}
+}
+
+func TestLogLaneVerifyTimeout(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll := NewLogLane(context.Background())
+	l, _ := ll.DeriveWithTimeout(time.Hour)
+
+	l.Trace("test of trace")
+
+	expected := "TRACE {GUID} test of trace"
+
+	ll2, ok := l.(*logLane)
+	if !ok {
+		t.Fatal("lane not a log lane")
+	}
+
+	verifyLogLaneEvents(t, ll2, expected, buf)
+
+	if ll.LaneId() == l.LaneId() {
+		t.Errorf("Lane IDs match")
+	}
+
+	if len(l.LaneId()) < 6 {
+		t.Errorf("insufficient lane id")
+	}
+}
+
+func TestLogLaneVerifyDeadline(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll := NewLogLane(context.Background())
+	l, _ := ll.DeriveWithDeadline(time.Now().Add(time.Hour))
+
+	l.Trace("test of trace")
+
+	expected := "TRACE {GUID} test of trace"
+
+	ll2, ok := l.(*logLane)
+	if !ok {
+		t.Fatal("lane not a log lane")
+	}
+
+	verifyLogLaneEvents(t, ll2, expected, buf)
+
+	if ll.LaneId() == l.LaneId() {
+		t.Errorf("Lane IDs match")
+	}
+
+	if len(l.LaneId()) < 6 {
+		t.Errorf("insufficient lane id")
+	}
+}
+
 func TestLogLaneWrappedLogger(t *testing.T) {
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
@@ -718,6 +1208,164 @@ func TestNullLaneInheritLevel(t *testing.T) {
 	}
 }
 
+func TestNullLaneWithCancel(t *testing.T) {
+	nl := NewNullLane(context.Background())
+
+	level := nl.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	nl2, cancel := nl.DeriveWithCancel()
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-nl2.Done()
+		isDone <- struct{}{}
+	}()
+
+	level = nl2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	time.Sleep(time.Millisecond)
+	cancel()
+
+	<-isDone
+}
+
+func TestNullLaneWithTimeoutCancel(t *testing.T) {
+	nl := NewNullLane(context.Background())
+
+	level := nl.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	nl2, cancel := nl.DeriveWithTimeout(time.Hour)
+
+	isDone := make(chan struct{})
+
+	start := time.Now()
+	go func() {
+		<-nl2.Done()
+		isDone <- struct{}{}
+	}()
+
+	level = nl2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	time.Sleep(time.Millisecond)
+	cancel()
+
+	<-isDone
+
+	delta := time.Since(start)
+	if delta.Milliseconds() > 60 {
+		t.Error("Timeout too long")
+	}
+}
+
+func TestNullLaneWithTimeoutExpire(t *testing.T) {
+	nl := NewNullLane(context.Background())
+
+	level := nl.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	nl2, _ := nl.DeriveWithTimeout(time.Millisecond)
+
+	isDone := make(chan struct{})
+
+	start := time.Now()
+	go func() {
+		<-nl2.Done()
+		isDone <- struct{}{}
+	}()
+
+	level = nl2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	<-isDone
+
+	delta := time.Since(start)
+	if delta.Milliseconds() > 60 {
+		t.Error("Timeout too long")
+	}
+}
+
+func TestNullLaneWithDeadlineCancel(t *testing.T) {
+	nl := NewNullLane(context.Background())
+
+	level := nl.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	start := time.Now()
+	nl2, cancel := nl.DeriveWithDeadline(start.Add(time.Minute))
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-nl2.Done()
+		isDone <- struct{}{}
+	}()
+
+	level = nl2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	time.Sleep(time.Millisecond)
+	cancel()
+
+	<-isDone
+
+	delta := time.Since(start)
+	if delta.Milliseconds() > 60 {
+		t.Error("Timeout too long")
+	}
+}
+
+func TestNullLaneWithDeadlineExpire(t *testing.T) {
+	nl := NewNullLane(context.Background())
+
+	level := nl.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	start := time.Now()
+	nl2, _ := nl.DeriveWithDeadline(start.Add(time.Millisecond * 10))
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-nl2.Done()
+		isDone <- struct{}{}
+	}()
+
+	level = nl2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	<-isDone
+
+	delta := time.Since(start)
+	if delta.Milliseconds() > 60 {
+		t.Error("Timeout too long")
+	}
+}
+
 func TestNullLaneDerivation(t *testing.T) {
 	pll := NewNullLane(context.Background())
 	ll := pll.Derive()
@@ -733,5 +1381,77 @@ func TestNullLaneDerivation(t *testing.T) {
 
 	if buf1.Len() != 0 || buf2.Len() != 0 {
 		t.Errorf("unexpected data in logger output")
+	}
+}
+
+func TestNullLaneVerifyCancel(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	nl := NewNullLane(context.Background())
+	l, _ := nl.DeriveWithCancel()
+
+	l.Trace("test of trace")
+
+	_, ok := l.(*nullLane)
+	if !ok {
+		t.Fatal("lane not a null lane")
+	}
+
+	if nl.LaneId() == l.LaneId() {
+		t.Errorf("Lane IDs match")
+	}
+
+	if len(l.LaneId()) < 6 {
+		t.Errorf("insufficient lane id")
+	}
+}
+
+func TestNullLaneVerifyTimeout(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	nl := NewNullLane(context.Background())
+	l, _ := nl.DeriveWithTimeout(time.Hour)
+
+	l.Trace("test of trace")
+
+	_, ok := l.(*nullLane)
+	if !ok {
+		t.Fatal("lane not a null lane")
+	}
+
+	if nl.LaneId() == l.LaneId() {
+		t.Errorf("Lane IDs match")
+	}
+
+	if len(l.LaneId()) < 6 {
+		t.Errorf("insufficient lane id")
+	}
+}
+
+func TestNullLaneVerifyDeadline(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	nl := NewNullLane(context.Background())
+	l, _ := nl.DeriveWithDeadline(time.Now().Add(time.Hour))
+
+	l.Trace("test of trace")
+
+	_, ok := l.(*nullLane)
+	if !ok {
+		t.Fatal("lane not a null lane")
+	}
+
+	if nl.LaneId() == l.LaneId() {
+		t.Errorf("Lane IDs match")
+	}
+
+	if len(l.LaneId()) < 6 {
+		t.Errorf("insufficient lane id")
 	}
 }

@@ -3,6 +3,7 @@ package lane
 import (
 	"context"
 	"log"
+	"time"
 )
 
 const (
@@ -36,5 +37,8 @@ type (
 		Logger() *log.Logger
 
 		Derive() Lane
+		DeriveWithCancel() (Lane, context.CancelFunc)
+		DeriveWithDeadline(deadline time.Time) (Lane, context.CancelFunc)
+		DeriveWithTimeout(duration time.Duration) (Lane, context.CancelFunc)
 	}
 )

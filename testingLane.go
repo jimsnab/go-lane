@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -104,7 +105,7 @@ func (tl *testingLane) VerifyEventText(eventText string) (match bool) {
 func (tl *testingLane) EventsToString() string {
 	var sb strings.Builder
 
-	for _,e := range tl.Events {
+	for _, e := range tl.Events {
 		if sb.Len() > 0 {
 			sb.WriteRune('\n')
 		}
@@ -112,7 +113,7 @@ func (tl *testingLane) EventsToString() string {
 		sb.WriteRune('\t')
 		sb.WriteString(e.Message)
 	}
-	
+
 	return sb.String()
 }
 
@@ -204,6 +205,39 @@ func (tl *testingLane) Derive() Lane {
 	l.SetLogLevel(tl.level)
 
 	return l
+}
+
+func (tl *testingLane) DeriveWithCancel() (Lane, context.CancelFunc) {
+	childCtx, cancelFn := context.WithCancel(context.WithValue(tl.Context, parent_lane_id, tl.LaneId()))
+	l := NewTestingLane(childCtx)
+
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+	l.SetLogLevel(tl.level)
+
+	return l, cancelFn
+}
+
+func (tl *testingLane) DeriveWithDeadline(deadline time.Time) (Lane, context.CancelFunc) {
+	childCtx, cancelFn := context.WithDeadline(context.WithValue(tl.Context, parent_lane_id, tl.LaneId()), deadline)
+	l := NewTestingLane(childCtx)
+
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+	l.SetLogLevel(tl.level)
+
+	return l, cancelFn
+}
+
+func (tl *testingLane) DeriveWithTimeout(duration time.Duration) (Lane, context.CancelFunc) {
+	childCtx, cancelFn := context.WithTimeout(context.WithValue(tl.Context, parent_lane_id, tl.LaneId()), duration)
+	l := NewTestingLane(childCtx)
+
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+	l.SetLogLevel(tl.level)
+
+	return l, cancelFn
 }
 
 func (tl *testingLane) LaneId() string {

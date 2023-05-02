@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"sync/atomic"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -61,6 +62,27 @@ func (nl *nullLane) Derive() Lane {
 	l := NewTestingLane(context.WithValue(nl.Context, parent_lane_id, nl.LaneId()))
 	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
 	return l
+}
+
+func (nl *nullLane) DeriveWithCancel() (Lane, context.CancelFunc) {
+	childCtx, cancelFn := context.WithCancel(context.WithValue(nl.Context, parent_lane_id, nl.LaneId()))
+	l := NewNullLane(childCtx)
+	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
+	return l, cancelFn
+}
+
+func (nl *nullLane) DeriveWithDeadline(deadline time.Time) (Lane, context.CancelFunc) {
+	childCtx, cancelFn := context.WithDeadline(context.WithValue(nl.Context, parent_lane_id, nl.LaneId()), deadline)
+	l := NewNullLane(childCtx)
+	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
+	return l, cancelFn
+}
+
+func (nl *nullLane) DeriveWithTimeout(duration time.Duration) (Lane, context.CancelFunc) {
+	childCtx, cancelFn := context.WithTimeout(context.WithValue(nl.Context, parent_lane_id, nl.LaneId()), duration)
+	l := NewNullLane(childCtx)
+	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
+	return l, cancelFn
 }
 
 func (nl *nullLane) LaneId() string {
