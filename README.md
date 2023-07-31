@@ -71,3 +71,5 @@ a new correlation ID is needed.
 Normally the production code uses a log lane, and unit tests use a testing lane; a null
 lane is handy in unit tests to disable logging out of scope of the test.
 
+The code doing the logging or using the context should not care what kind of lane it
+is given to use.
