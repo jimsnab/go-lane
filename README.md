@@ -62,7 +62,7 @@ When spawining go routines, pass `l` around, or use one of the Derive functions 
 a new correlation ID is needed.
 
 # Types of Lanes
-* `NewLogLane` log messages go to the standard Go `log()` infrastructure.
+* `NewLogLane` log messages go to the standard Go `log` infrastructure.
 * `NewTestingLane` captures log messages into a buffer and provides `VerifyEvents()`,
   `VerifyEventText()` and `EventsToString()` for use in unit test code that checks the log to confirm
   an expected result.
