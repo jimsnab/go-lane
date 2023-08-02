@@ -5,6 +5,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -873,6 +874,43 @@ ERROR {GUID} test of error
 ERROR {GUID} testing 1213`
 
 	verifyLogLaneEvents(t, ll, expected, buf)
+}
+
+func TestLogLaneVerifyTextCrLf(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll := NewLogLaneWithCR(context.Background())
+
+	ll.Trace("test", "of", "trace")
+	ll.Tracef("testing %d", 123)
+
+	expected := "{DATE1} TRACE {GUID} test of trace\r\n{DATE2} TRACE {GUID} testing 123\r\n"
+
+	text := buf.String()
+
+	r := regexp.MustCompile(`(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})`)
+	matches := r.FindStringSubmatch(text)
+	if len(matches) != 2 {
+		t.Fatal("date")
+	}
+	date1 := matches[0]
+	expected = strings.ReplaceAll(expected, "{DATE1}", date1)
+	date2 := matches[1]
+	expected = strings.ReplaceAll(expected, "{DATE2}", date2)
+
+	r = regexp.MustCompile(`(\{[a-f0-9]{10}\})`)
+	matches = r.FindStringSubmatch(text)
+	if len(matches) != 2 {
+		t.Fatal("guid")
+	}
+	guid := matches[0]
+	expected = strings.ReplaceAll(expected, "{GUID}", guid)
+
+	if !bytes.Equal(buf.Bytes(), []byte(expected)) {
+		t.Error("mismatch")
+	}
 }
 
 func TestLogLaneVerifyTextFilterTrace(t *testing.T) {

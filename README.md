@@ -62,11 +62,13 @@ When spawining go routines, pass `l` around, or use one of the Derive functions 
 a new correlation ID is needed.
 
 # Types of Lanes
-* `NewLogLane` log messages go to the standard Go `log` infrastructure.
+* `NewLogLane` log messages go to the standard Go `log` infrastructure. Access the `log`
+  instance via `Logger()` to set flags, add a prefix, or change output I/O.
 * `NewTestingLane` captures log messages into a buffer and provides `VerifyEvents()`,
   `VerifyEventText()` and `EventsToString()` for use in unit test code that checks the log to confirm
   an expected result.
 * `NewNullLane` creates a lane that does not log but still has the context functionality.
+  Logging is similar to `log.SetOutput(io.Discard)` - fatal errors still terminate the app.
 
 Normally the production code uses a log lane, and unit tests use a testing lane; a null
 lane is handy in unit tests to disable logging out of scope of the test.
