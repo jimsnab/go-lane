@@ -58,6 +58,9 @@ func (nl *nullLane) Logger() *log.Logger {
 	return nl.wlog
 }
 
+func (nl *nullLane) Close() {
+}
+
 func (nl *nullLane) Derive() Lane {
 	l := NewTestingLane(context.WithValue(nl.Context, parent_lane_id, nl.LaneId()))
 	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))

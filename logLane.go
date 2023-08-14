@@ -15,9 +15,10 @@ import (
 type (
 	logLane struct {
 		context.Context
-		wlog  *log.Logger
-		level int32
-		cr string
+		wlog   *log.Logger
+		writer *log.Logger
+		level  int32
+		cr     string
 	}
 
 	wrappedLogWriter struct {
@@ -34,7 +35,7 @@ func isLogCrLf() bool {
 	var buf bytes.Buffer
 	testLog := log.New(&buf, "", 0)
 	testLog.Println()
-	return buf.Bytes()[0]  == '\r'
+	return buf.Bytes()[0] == '\r'
 }
 
 func NewLogLane(ctx context.Context) Lane {
@@ -46,6 +47,7 @@ func newLogLane(ctx context.Context) *logLane {
 
 	// make a logging instance that ultimately does logging via the lane
 	wlw := wrappedLogWriter{ll: &ll}
+	ll.writer = log.Default()
 	ll.wlog = log.New(&wlw, "", 0)
 
 	id := uuid.New().String()
@@ -89,80 +91,83 @@ func (ll *logLane) shouldLog(level LaneLogLevel) bool {
 
 func (ll *logLane) Trace(args ...any) {
 	if ll.shouldLog(LogLevelTrace) {
-		log.Printf("%s %s%s", ll.getLaneId("TRACE"), sprint(args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getLaneId("TRACE"), sprint(args...), ll.cr)
 	}
 }
 
 func (ll *logLane) Tracef(format string, args ...any) {
 	if ll.shouldLog(LogLevelTrace) {
-		log.Printf("%s %s%s", ll.getLaneId("TRACE"), fmt.Sprintf(format, args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getLaneId("TRACE"), fmt.Sprintf(format, args...), ll.cr)
 	}
 }
 
 func (ll *logLane) Debug(args ...any) {
 	if ll.shouldLog(LogLevelDebug) {
-		log.Printf("%s %s%s", ll.getLaneId("DEBUG"), sprint(args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getLaneId("DEBUG"), sprint(args...), ll.cr)
 	}
 }
 
 func (ll *logLane) Debugf(format string, args ...any) {
 	if ll.shouldLog(LogLevelDebug) {
-		log.Printf("%s %s%s", ll.getLaneId("DEBUG"), fmt.Sprintf(format, args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getLaneId("DEBUG"), fmt.Sprintf(format, args...), ll.cr)
 	}
 }
 
 func (ll *logLane) Info(args ...any) {
 	if ll.shouldLog(LogLevelInfo) {
-		log.Printf("%s %s%s", ll.getLaneId("INFO"), sprint(args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getLaneId("INFO"), sprint(args...), ll.cr)
 	}
 }
 
 func (ll *logLane) Infof(format string, args ...any) {
 	if ll.shouldLog(LogLevelInfo) {
-		log.Printf("%s %s%s", ll.getLaneId("INFO"), fmt.Sprintf(format, args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getLaneId("INFO"), fmt.Sprintf(format, args...), ll.cr)
 	}
 }
 
 func (ll *logLane) Warn(args ...any) {
 	if ll.shouldLog(LogLevelWarn) {
-		log.Printf("%s %s%s", ll.getLaneId("WARN"), sprint(args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getLaneId("WARN"), sprint(args...), ll.cr)
 	}
 }
 
 func (ll *logLane) Warnf(format string, args ...any) {
 	if ll.shouldLog(LogLevelWarn) {
-		log.Printf("%s %s%s", ll.getLaneId("WARN"), fmt.Sprintf(format, args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getLaneId("WARN"), fmt.Sprintf(format, args...), ll.cr)
 	}
 }
 
 func (ll *logLane) Error(args ...any) {
 	if ll.shouldLog(LogLevelError) {
-		log.Printf("%s %s%s", ll.getLaneId("ERROR"), sprint(args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getLaneId("ERROR"), sprint(args...), ll.cr)
 	}
 }
 
 func (ll *logLane) Errorf(format string, args ...any) {
 	if ll.shouldLog(LogLevelError) {
-		log.Printf("%s %s%s", ll.getLaneId("ERROR"), fmt.Sprintf(format, args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getLaneId("ERROR"), fmt.Sprintf(format, args...), ll.cr)
 	}
 }
 
 func (ll *logLane) Fatal(args ...any) {
 	if ll.shouldLog(LogLevelFatal) {
-		log.Printf("%s %s%s", ll.getLaneId("FATAL"), sprint(args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getLaneId("FATAL"), sprint(args...), ll.cr)
 	}
 	panic("fatal error")
 }
 
 func (ll *logLane) Fatalf(format string, args ...any) {
 	if ll.shouldLog(LogLevelFatal) {
-		log.Printf("%s %s%s", ll.getLaneId("FATAL"), fmt.Sprintf(format, args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getLaneId("FATAL"), fmt.Sprintf(format, args...), ll.cr)
 	}
 	panic("fatal error")
 }
 
 func (ll *logLane) Logger() *log.Logger {
 	return ll.wlog
+}
+
+func (ll *logLane) Close() {
 }
 
 func (ll *logLane) Derive() Lane {

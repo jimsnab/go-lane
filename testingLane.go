@@ -197,6 +197,9 @@ func (tl *testingLane) Logger() *log.Logger {
 	return tl.tlog
 }
 
+func (tl *testingLane) Close() {
+}
+
 func (tl *testingLane) Derive() Lane {
 	l := NewTestingLane(context.WithValue(tl.Context, parent_lane_id, tl.LaneId()))
 

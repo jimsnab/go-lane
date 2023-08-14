@@ -1493,3 +1493,42 @@ func TestNullLaneVerifyDeadline(t *testing.T) {
 		t.Errorf("insufficient lane id")
 	}
 }
+
+func TestDiskLane(t *testing.T) {
+	os.Remove("test.log")
+
+	dl, err := NewDiskLane(context.Background(), "test.log")
+	if err != nil {
+		t.Fatal("make test.log")
+	}
+	if dl == nil {
+		t.Fatal("nil disk lane")
+	}
+
+	dl.Info("testing 123")
+
+	dl2 := dl.Derive()
+	dl.Close()
+
+	dl2.Info("testing 456")
+	dl2.Close()
+
+	bytes, err := os.ReadFile("test.log")
+	if err != nil {
+		t.Fatalf("read test.log: %v", err)
+	}
+
+	text := string(bytes)
+	if !strings.Contains(text, "testing 123\n") || !strings.Contains(text, "testing 456\n") {
+		t.Errorf("incorrect contents of disk log file")
+	}
+
+	os.Remove("test.log")
+}
+
+func TestDiskLaneBadPath(t *testing.T) {
+	_, err := NewDiskLane(context.Background(), "")
+	if err == nil {
+		t.Fatal("make test.log")
+	}
+}

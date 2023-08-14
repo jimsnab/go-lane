@@ -35,6 +35,7 @@ type (
 		Fatal(args ...any)
 		Fatalf(format string, args ...any)
 		Logger() *log.Logger
+		Close()
 
 		Derive() Lane
 		DeriveWithCancel() (Lane, context.CancelFunc)
