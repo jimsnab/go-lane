@@ -243,6 +243,16 @@ func (tl *testingLane) DeriveWithTimeout(duration time.Duration) (Lane, context.
 	return l, cancelFn
 }
 
+func (tl *testingLane) DeriveReplaceContext(ctx context.Context) Lane {
+	l := NewTestingLane(ctx)
+
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+	l.SetLogLevel(tl.level)
+
+	return l
+}
+
 func (tl *testingLane) LaneId() string {
 	return tl.Value(testing_lane_id).(string)
 }

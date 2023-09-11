@@ -88,6 +88,12 @@ func (nl *nullLane) DeriveWithTimeout(duration time.Duration) (Lane, context.Can
 	return l, cancelFn
 }
 
+func (nl *nullLane) DeriveReplaceContext(ctx context.Context) Lane {
+	l := NewNullLane(ctx)
+	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
+	return l
+}
+
 func (nl *nullLane) LaneId() string {
 	return nl.Value(null_lane_id).(string)
 }

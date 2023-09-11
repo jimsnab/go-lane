@@ -197,6 +197,12 @@ func (ll *logLane) DeriveWithTimeout(duration time.Duration) (Lane, context.Canc
 	return l, cancelFn
 }
 
+func (ll *logLane) DeriveReplaceContext(ctx context.Context) Lane {
+	l := NewLogLane(ctx)
+	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&ll.level)))
+	return l
+}
+
 func (ll *logLane) LaneId() string {
 	return ll.Value(log_lane_id).(string)
 }

@@ -41,5 +41,6 @@ type (
 		DeriveWithCancel() (Lane, context.CancelFunc)
 		DeriveWithDeadline(deadline time.Time) (Lane, context.CancelFunc)
 		DeriveWithTimeout(duration time.Duration) (Lane, context.CancelFunc)
+		DeriveReplaceContext(ctx context.Context) Lane
 	}
 )

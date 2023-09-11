@@ -12,8 +12,11 @@ import (
 )
 
 type testKeyType string
+type testValueType string
 
-const test_str testKeyType = "test"
+const kTestStr testKeyType = "test"
+const kTestBase testKeyType = "base"
+const kTestReplaced testValueType = "replaced"
 
 func TestLane(t *testing.T) {
 	tl := NewTestingLane(context.Background())
@@ -23,7 +26,7 @@ func TestLane(t *testing.T) {
 		t.Errorf("wrong lane id length %d", len(lid))
 	}
 
-	ctx := context.WithValue(tl, test_str, "pass")
+	ctx := context.WithValue(tl, kTestStr, "pass")
 
 	events := []*laneEvent{}
 	tl.Trace("test", "of", "trace")
@@ -55,7 +58,7 @@ func TestLane(t *testing.T) {
 		t.Errorf("Test events don't match")
 	}
 
-	if ctx.Value(test_str) != string("pass") {
+	if ctx.Value(kTestStr) != string("pass") {
 		t.Errorf("Context is not working")
 	}
 }
@@ -250,6 +253,23 @@ func TestLaneWithDeadlineExpire(t *testing.T) {
 	delta := time.Since(start)
 	if delta.Milliseconds() > 60 {
 		t.Error("Timeout too long")
+	}
+}
+
+func TestLaneReplaceContext(t *testing.T) {
+	c1 := context.WithValue(context.Background(), kTestBase, kTestBase)
+	tl := NewTestingLane(c1)
+
+	c2 := context.WithValue(context.Background(), kTestBase, kTestReplaced)
+	tl2 := tl.DeriveReplaceContext(c2)
+
+	if tl2.Value(kTestBase) != kTestReplaced {
+		t.Error("Base not replaced")
+	}
+
+	tl3 := tl2.Derive()
+	if tl3.Value(kTestBase) != kTestReplaced {
+		t.Error("Derived incorrect")
 	}
 }
 
@@ -586,7 +606,7 @@ func TestLogLane(t *testing.T) {
 		t.Errorf("wrong lane id length %d", len(lid))
 	}
 
-	ctx := context.WithValue(ll, test_str, "pass")
+	ctx := context.WithValue(ll, kTestStr, "pass")
 
 	ll.Trace("test", "of", "trace")
 	ll.Tracef("testing %d", 123)
@@ -603,7 +623,7 @@ func TestLogLane(t *testing.T) {
 	ll.Error("test", "of", "error")
 	ll.Errorf("testing %d", 1213)
 
-	if ctx.Value(test_str).(string) != "pass" {
+	if ctx.Value(kTestStr).(string) != "pass" {
 		t.Errorf("Context is not working")
 	}
 }
@@ -837,6 +857,23 @@ func verifyLogLaneEvents(t *testing.T, ll Lane, expected string, buf bytes.Buffe
 				t.Errorf("can't parse log timestamp %s", datePart)
 			}
 		}
+	}
+}
+
+func TestLogLaneReplaceContext(t *testing.T) {
+	c1 := context.WithValue(context.Background(), kTestBase, kTestBase)
+	ll := NewLogLane(c1)
+
+	c2 := context.WithValue(context.Background(), kTestBase, kTestReplaced)
+	ll2 := ll.DeriveReplaceContext(c2)
+
+	if ll2.Value(kTestBase) != kTestReplaced {
+		t.Error("Base not replaced")
+	}
+
+	ll3 := ll2.Derive()
+	if ll3.Value(kTestBase) != kTestReplaced {
+		t.Error("Derived incorrect")
 	}
 }
 
@@ -1491,6 +1528,23 @@ func TestNullLaneVerifyDeadline(t *testing.T) {
 
 	if len(l.LaneId()) < 6 {
 		t.Errorf("insufficient lane id")
+	}
+}
+
+func TestNullLaneReplaceContext(t *testing.T) {
+	c1 := context.WithValue(context.Background(), kTestBase, kTestBase)
+	nl := NewNullLane(c1)
+
+	c2 := context.WithValue(context.Background(), kTestBase, kTestReplaced)
+	nl2 := nl.DeriveReplaceContext(c2)
+
+	if nl2.Value(kTestBase) != kTestReplaced {
+		t.Error("Base not replaced")
+	}
+
+	nl3 := nl2.Derive()
+	if nl3.Value(kTestBase) != kTestReplaced {
+		t.Error("Derived incorrect")
 	}
 }
 
