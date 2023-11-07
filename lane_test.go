@@ -850,7 +850,9 @@ func verifyLogLaneEvents(t *testing.T, ll Lane, expected string, buf bytes.Buffe
 			datePart := actualLine[:20]
 			textPart := actualLine[20:]
 			if textPart != expectedLine {
-				t.Errorf("log events don't match:\n '%s' vs expected\n '%s'", textPart, expectedLine)
+				if !strings.HasSuffix(expectedLine, "{ANY}") || !strings.HasPrefix(textPart, expectedLine[:len(expectedLine)-5]) {
+					t.Errorf("log events don't match:\n '%s' vs expected\n '%s'", textPart, expectedLine)
+				}
 			}
 			_, err := time.Parse("2006/01/02 15:04:05", strings.TrimSpace(datePart))
 			if err != nil {
@@ -875,6 +877,67 @@ func TestLogLaneReplaceContext(t *testing.T) {
 	if ll3.Value(kTestBase) != kTestReplaced {
 		t.Error("Derived incorrect")
 	}
+}
+
+func TestLogLaneEnableStack(t *testing.T) {
+	ll := NewLogLane(context.Background())
+
+	for level := LogLevelTrace; level <= LogLevelFatal; level++ {
+		v := ll.EnableStackTrace(level, true)
+		if v {
+			t.Error("expected false")
+		}
+
+		v = ll.EnableStackTrace(level, true)
+		if !v {
+			t.Error("expected true")
+		}
+	}
+
+	for level := LogLevelTrace; level <= LogLevelFatal; level++ {
+		v := ll.EnableStackTrace(level, false)
+		if !v {
+			t.Error("expected false")
+		}
+
+		v = ll.EnableStackTrace(level, false)
+		if v {
+			t.Error("expected false")
+		}
+	}
+}
+
+func TestLogLaneEnableStack2(t *testing.T) {
+	ll := NewLogLane(context.Background())
+
+	v := ll.EnableStackTrace(LogLevelError, true)
+	if v {
+		t.Error("expected false")
+	}
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll.Error("test", "of", "error")
+	ll.Errorf("testing %d", 1213)
+
+	expected := `ERROR {GUID} test of error
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+ERROR {GUID} testing 1213
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}`
+
+	verifyLogLaneEvents(t, ll, expected, buf)
 }
 
 func TestLogLaneVerifyText(t *testing.T) {
@@ -1545,6 +1608,34 @@ func TestNullLaneReplaceContext(t *testing.T) {
 	nl3 := nl2.Derive()
 	if nl3.Value(kTestBase) != kTestReplaced {
 		t.Error("Derived incorrect")
+	}
+}
+
+func TestNullLaneEnableStack(t *testing.T) {
+	nl := NewNullLane(context.Background())
+
+	for level := LogLevelTrace; level <= LogLevelFatal; level++ {
+		v := nl.EnableStackTrace(level, true)
+		if v {
+			t.Error("expected false")
+		}
+
+		v = nl.EnableStackTrace(level, true)
+		if !v {
+			t.Error("expected true")
+		}
+	}
+
+	for level := LogLevelTrace; level <= LogLevelFatal; level++ {
+		v := nl.EnableStackTrace(level, false)
+		if !v {
+			t.Error("expected false")
+		}
+
+		v = nl.EnableStackTrace(level, false)
+		if v {
+			t.Error("expected false")
+		}
 	}
 }
 

@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,9 +23,10 @@ type (
 	testingLane struct {
 		mu sync.Mutex
 		context.Context
-		Events []*laneEvent
-		tlog   *log.Logger
-		level  LaneLogLevel
+		Events     []*laneEvent
+		tlog       *log.Logger
+		level      LaneLogLevel
+		stackTrace []atomic.Bool
 	}
 
 	testingLaneId string
@@ -43,7 +46,9 @@ type (
 const testing_lane_id testingLaneId = "testing_lane"
 
 func NewTestingLane(ctx context.Context) TestingLane {
-	tl := testingLane{}
+	tl := testingLane{
+		stackTrace: make([]atomic.Bool, int(LogLevelFatal+1)),
+	}
 
 	// make a logging instance that ultimately does logging via the lane
 	tlw := testingLogWriter{tl: &tl}
@@ -177,20 +182,33 @@ func (tl *testingLane) Warnf(format string, args ...any) {
 
 func (tl *testingLane) Error(args ...any) {
 	tl.recordLaneEvent(LogLevelError, "ERROR", nil, args...)
+	tl.logStack(LogLevelError)
 }
 
 func (tl *testingLane) Errorf(format string, args ...any) {
 	tl.recordLaneEvent(LogLevelError, "ERROR", &format, args...)
+	tl.logStack(LogLevelError)
 }
 
 func (tl *testingLane) Fatal(args ...any) {
 	tl.recordLaneEvent(LogLevelFatal, "FATAL", nil, args...)
+	tl.logStack(LogLevelFatal)
 	panic("fatal error") // test must recover
 }
 
 func (tl *testingLane) Fatalf(format string, args ...any) {
 	tl.recordLaneEvent(LogLevelFatal, "FATAL", &format, args...)
+	tl.logStack(LogLevelFatal)
 	panic("fatal error") // test must recover
+}
+
+func (tl *testingLane) logStack(level LaneLogLevel) {
+	if tl.stackTrace[level].Load() {
+		buf := make([]byte, 16384)
+		n := runtime.Stack(buf, false)
+		format := "%s"
+		tl.recordLaneEvent(level, "STACK", &format, string(buf[0:n]))
+	}
 }
 
 func (tl *testingLane) Logger() *log.Logger {
@@ -251,6 +269,10 @@ func (tl *testingLane) DeriveReplaceContext(ctx context.Context) Lane {
 	l.SetLogLevel(tl.level)
 
 	return l
+}
+
+func (tl *testingLane) EnableStackTrace(level LaneLogLevel, enable bool) bool {
+	return tl.stackTrace[level].Swap(enable)
 }
 
 func (tl *testingLane) LaneId() string {

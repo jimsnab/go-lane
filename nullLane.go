@@ -14,8 +14,9 @@ const null_lane_id = nullContext("null_lane_id")
 type (
 	nullLane struct {
 		context.Context
-		wlog  *log.Logger
-		level int32
+		wlog       *log.Logger
+		level      int32
+		stackTrace []atomic.Bool
 	}
 
 	wrappedNullWriter struct {
@@ -26,7 +27,9 @@ type (
 )
 
 func NewNullLane(ctx context.Context) Lane {
-	nl := nullLane{}
+	nl := nullLane{
+		stackTrace: make([]atomic.Bool, int(LogLevelFatal+1)),
+	}
 
 	wnw := wrappedNullWriter{nl: &nl}
 	nl.wlog = log.New(&wnw, "", 0)
@@ -92,6 +95,11 @@ func (nl *nullLane) DeriveReplaceContext(ctx context.Context) Lane {
 	l := NewNullLane(ctx)
 	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
 	return l
+}
+
+func (nl *nullLane) EnableStackTrace(level LaneLogLevel, enable bool) bool {
+	// the last value should work as if the setting does something
+	return nl.stackTrace[level].Swap(enable)
 }
 
 func (nl *nullLane) LaneId() string {
