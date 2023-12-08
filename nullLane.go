@@ -3,6 +3,7 @@ package lane
 import (
 	"context"
 	"log"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -17,6 +18,8 @@ type (
 		wlog       *log.Logger
 		level      int32
 		stackTrace []atomic.Bool
+		mu         sync.Mutex
+		tees       []Lane
 	}
 
 	wrappedNullWriter struct {
@@ -27,8 +30,13 @@ type (
 )
 
 func NewNullLane(ctx context.Context) Lane {
+	return deriveNullLane(ctx, []Lane{})
+}
+
+func deriveNullLane(ctx context.Context, tees []Lane) Lane {
 	nl := nullLane{
 		stackTrace: make([]atomic.Bool, int(LogLevelFatal+1)),
+		tees:       tees,
 	}
 
 	wnw := wrappedNullWriter{nl: &nl}
@@ -44,18 +52,44 @@ func (nl *nullLane) SetLogLevel(newLevel LaneLogLevel) (priorLevel LaneLogLevel)
 	return
 }
 
-func (nl *nullLane) Trace(args ...any)                 {}
-func (nl *nullLane) Tracef(format string, args ...any) {}
-func (nl *nullLane) Debug(args ...any)                 {}
-func (nl *nullLane) Debugf(format string, args ...any) {}
-func (nl *nullLane) Info(args ...any)                  {}
-func (nl *nullLane) Infof(format string, args ...any)  {}
-func (nl *nullLane) Warn(args ...any)                  {}
-func (nl *nullLane) Warnf(format string, args ...any)  {}
-func (nl *nullLane) Error(args ...any)                 {}
-func (nl *nullLane) Errorf(format string, args ...any) {}
-func (nl *nullLane) Fatal(args ...any)                 { panic("fatal error") }
-func (nl *nullLane) Fatalf(format string, args ...any) { panic("fatal error") }
+func (nl *nullLane) tee(logger func(l Lane)) {
+	nl.mu.Lock()
+	defer nl.mu.Unlock()
+
+	for _, t := range nl.tees {
+		logger(t)
+	}
+}
+
+func (nl *nullLane) Trace(args ...any) { nl.tee(func(l Lane) { l.Trace(args...) }) }
+func (nl *nullLane) Tracef(format string, args ...any) {
+	nl.tee(func(l Lane) { l.Tracef(format, args...) })
+}
+func (nl *nullLane) Debug(args ...any) { nl.tee(func(l Lane) { l.Debug(args...) }) }
+func (nl *nullLane) Debugf(format string, args ...any) {
+	nl.tee(func(l Lane) { l.Debugf(format, args...) })
+}
+func (nl *nullLane) Info(args ...any) { nl.tee(func(l Lane) { l.Info(args...) }) }
+func (nl *nullLane) Infof(format string, args ...any) {
+	nl.tee(func(l Lane) { l.Infof(format, args...) })
+}
+func (nl *nullLane) Warn(args ...any) { nl.tee(func(l Lane) { l.Warn(args...) }) }
+func (nl *nullLane) Warnf(format string, args ...any) {
+	nl.tee(func(l Lane) { l.Warnf(format, args...) })
+}
+func (nl *nullLane) Error(args ...any) { nl.tee(func(l Lane) { l.Error(args...) }) }
+func (nl *nullLane) Errorf(format string, args ...any) {
+	nl.tee(func(l Lane) { l.Errorf(format, args...) })
+}
+func (nl *nullLane) PreFatal(args ...any) { nl.tee(func(l Lane) { l.PreFatal(args...) }) }
+func (nl *nullLane) PreFatalf(format string, args ...any) {
+	nl.tee(func(l Lane) { l.PreFatalf(format, args...) })
+}
+func (nl *nullLane) Fatal(args ...any) { nl.PreFatal(args...); panic("fatal error") }
+func (nl *nullLane) Fatalf(format string, args ...any) {
+	nl.PreFatalf(format, args...)
+	panic("fatal error")
+}
 
 func (nl *nullLane) Logger() *log.Logger {
 	return nl.wlog
@@ -65,28 +99,28 @@ func (nl *nullLane) Close() {
 }
 
 func (nl *nullLane) Derive() Lane {
-	l := NewTestingLane(context.WithValue(nl.Context, parent_lane_id, nl.LaneId()))
+	l := deriveNullLane(context.WithValue(nl.Context, parent_lane_id, nl.LaneId()), nl.tees)
 	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
 	return l
 }
 
 func (nl *nullLane) DeriveWithCancel() (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithCancel(context.WithValue(nl.Context, parent_lane_id, nl.LaneId()))
-	l := NewNullLane(childCtx)
+	l := deriveNullLane(childCtx, nl.tees)
 	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
 	return l, cancelFn
 }
 
 func (nl *nullLane) DeriveWithDeadline(deadline time.Time) (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithDeadline(context.WithValue(nl.Context, parent_lane_id, nl.LaneId()), deadline)
-	l := NewNullLane(childCtx)
+	l := deriveNullLane(childCtx, nl.tees)
 	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
 	return l, cancelFn
 }
 
 func (nl *nullLane) DeriveWithTimeout(duration time.Duration) (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithTimeout(context.WithValue(nl.Context, parent_lane_id, nl.LaneId()), duration)
-	l := NewNullLane(childCtx)
+	l := deriveNullLane(childCtx, nl.tees)
 	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
 	return l, cancelFn
 }
@@ -104,6 +138,23 @@ func (nl *nullLane) EnableStackTrace(level LaneLogLevel, enable bool) bool {
 
 func (nl *nullLane) LaneId() string {
 	return nl.Value(null_lane_id).(string)
+}
+
+func (nl *nullLane) AddTee(l Lane) {
+	nl.mu.Lock()
+	nl.tees = append(nl.tees, l)
+	nl.mu.Unlock()
+}
+
+func (nl *nullLane) RemoveTee(l Lane) {
+	nl.mu.Lock()
+	for i, t := range nl.tees {
+		if t.LaneId() == l.LaneId() {
+			nl.tees = append(nl.tees[:i], nl.tees[i+1:]...)
+			break
+		}
+	}
+	nl.mu.Unlock()
 }
 
 func (wnw *wrappedNullWriter) Write(p []byte) (n int, err error) {

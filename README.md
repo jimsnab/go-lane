@@ -54,6 +54,9 @@ Lane interface {
 	DeriveReplaceContext(ctx context.Context) Lane
 
 	EnableStackTrace(level LaneLogLevel, enable bool) (wasEnabled bool)
+
+	AddTee(l Lane)
+	RemoveTee(l Lane)
 }
 ```
 
@@ -64,6 +67,10 @@ logged message.
 
 When spawining go routines, pass `l` around, or use one of the Derive functions when
 a new correlation ID is needed.
+
+Another lane can "tee" from a source lane. For example, it might be desired to tee a
+testing lane from a logging lane, and then a unit test can verify certain log messages
+occur during the test.
 
 # Types of Lanes
 * `NewLogLane` log messages go to the standard Go `log` infrastructure. Access the `log`

@@ -16,21 +16,25 @@ type (
 )
 
 func NewDiskLane(ctx context.Context, logFile string) (l Lane, err error) {
-	ll := newLogLane(ctx)
+	ll := deriveLogLane(ctx, []Lane{}, "")
 
 	f, err := os.OpenFile(logFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		return
 	}
 
-	dl := diskLane{logLane: *ll, f: f}
+	dl := diskLane{
+		f: f,
+	}
+	ll.clone(&dl.logLane)
+
 	dl.logLane.writer = log.New(f, "", 0)
 	l = &dl
 	return
 }
 
 func (dl *diskLane) Derive() Lane {
-	ll := newLogLane(context.WithValue(dl.Context, parent_lane_id, dl.LaneId()))
+	ll := deriveLogLane(context.WithValue(dl.Context, parent_lane_id, dl.LaneId()), dl.tees, dl.cr)
 	ll.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&ll.level)))
 
 	newFd, err := syscall.Dup(int(dl.f.Fd()))

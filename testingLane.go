@@ -27,6 +27,7 @@ type (
 		tlog       *log.Logger
 		level      LaneLogLevel
 		stackTrace []atomic.Bool
+		tees       []Lane
 	}
 
 	testingLaneId string
@@ -46,8 +47,13 @@ type (
 const testing_lane_id testingLaneId = "testing_lane"
 
 func NewTestingLane(ctx context.Context) TestingLane {
+	return deriveTestingLane(ctx, []Lane{})
+}
+
+func deriveTestingLane(ctx context.Context, tees []Lane) TestingLane {
 	tl := testingLane{
 		stackTrace: make([]atomic.Bool, int(LogLevelFatal+1)),
+		tees:       tees,
 	}
 
 	// make a logging instance that ultimately does logging via the lane
@@ -148,57 +154,84 @@ func (tl *testingLane) recordLaneEvent(level LaneLogLevel, levelText string, for
 	}
 }
 
+func (tl *testingLane) tee(logger func(l Lane)) {
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+
+	for _, t := range tl.tees {
+		logger(t)
+	}
+}
+
 func (tl *testingLane) Trace(args ...any) {
 	tl.recordLaneEvent(LogLevelTrace, "TRACE", nil, args...)
+	tl.tee(func(l Lane) { l.Trace(args...) })
 }
 
 func (tl *testingLane) Tracef(format string, args ...any) {
 	tl.recordLaneEvent(LogLevelTrace, "TRACE", &format, args...)
+	tl.tee(func(l Lane) { l.Tracef(format, args...) })
 }
 
 func (tl *testingLane) Debug(args ...any) {
 	tl.recordLaneEvent(LogLevelDebug, "DEBUG", nil, args...)
+	tl.tee(func(l Lane) { l.Debug(args...) })
 }
 
 func (tl *testingLane) Debugf(format string, args ...any) {
 	tl.recordLaneEvent(LogLevelDebug, "DEBUG", &format, args...)
+	tl.tee(func(l Lane) { l.Debugf(format, args...) })
 }
 
 func (tl *testingLane) Info(args ...any) {
 	tl.recordLaneEvent(LogLevelInfo, "INFO", nil, args...)
+	tl.tee(func(l Lane) { l.Info(args...) })
 }
 
 func (tl *testingLane) Infof(format string, args ...any) {
 	tl.recordLaneEvent(LogLevelInfo, "INFO", &format, args...)
+	tl.tee(func(l Lane) { l.Infof(format, args...) })
 }
 
 func (tl *testingLane) Warn(args ...any) {
 	tl.recordLaneEvent(LogLevelWarn, "WARN", nil, args...)
+	tl.tee(func(l Lane) { l.Warn(args...) })
 }
 
 func (tl *testingLane) Warnf(format string, args ...any) {
 	tl.recordLaneEvent(LogLevelWarn, "WARN", &format, args...)
+	tl.tee(func(l Lane) { l.Warnf(format, args...) })
 }
 
 func (tl *testingLane) Error(args ...any) {
 	tl.recordLaneEvent(LogLevelError, "ERROR", nil, args...)
 	tl.logStack(LogLevelError)
+	tl.tee(func(l Lane) { l.Error(args...) })
 }
 
 func (tl *testingLane) Errorf(format string, args ...any) {
 	tl.recordLaneEvent(LogLevelError, "ERROR", &format, args...)
 	tl.logStack(LogLevelError)
+	tl.tee(func(l Lane) { l.Errorf(format, args...) })
+}
+
+func (tl *testingLane) PreFatal(args ...any) {
+	tl.recordLaneEvent(LogLevelFatal, "FATAL", nil, args...)
+	tl.tee(func(l Lane) { l.PreFatal(args...) })
+}
+
+func (tl *testingLane) PreFatalf(format string, args ...any) {
+	tl.recordLaneEvent(LogLevelFatal, "FATAL", &format, args...)
+	tl.tee(func(l Lane) { l.PreFatalf(format, args...) })
 }
 
 func (tl *testingLane) Fatal(args ...any) {
-	tl.recordLaneEvent(LogLevelFatal, "FATAL", nil, args...)
-	tl.logStack(LogLevelFatal)
+	tl.PreFatal(args...)
 	panic("fatal error") // test must recover
 }
 
 func (tl *testingLane) Fatalf(format string, args ...any) {
-	tl.recordLaneEvent(LogLevelFatal, "FATAL", &format, args...)
-	tl.logStack(LogLevelFatal)
+	tl.PreFatalf(format, args...)
 	panic("fatal error") // test must recover
 }
 
@@ -219,7 +252,7 @@ func (tl *testingLane) Close() {
 }
 
 func (tl *testingLane) Derive() Lane {
-	l := NewTestingLane(context.WithValue(tl.Context, parent_lane_id, tl.LaneId()))
+	l := deriveTestingLane(context.WithValue(tl.Context, parent_lane_id, tl.LaneId()), tl.tees)
 
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
@@ -230,7 +263,7 @@ func (tl *testingLane) Derive() Lane {
 
 func (tl *testingLane) DeriveWithCancel() (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithCancel(context.WithValue(tl.Context, parent_lane_id, tl.LaneId()))
-	l := NewTestingLane(childCtx)
+	l := deriveTestingLane(childCtx, tl.tees)
 
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
@@ -241,7 +274,7 @@ func (tl *testingLane) DeriveWithCancel() (Lane, context.CancelFunc) {
 
 func (tl *testingLane) DeriveWithDeadline(deadline time.Time) (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithDeadline(context.WithValue(tl.Context, parent_lane_id, tl.LaneId()), deadline)
-	l := NewTestingLane(childCtx)
+	l := deriveTestingLane(childCtx, tl.tees)
 
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
@@ -252,7 +285,7 @@ func (tl *testingLane) DeriveWithDeadline(deadline time.Time) (Lane, context.Can
 
 func (tl *testingLane) DeriveWithTimeout(duration time.Duration) (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithTimeout(context.WithValue(tl.Context, parent_lane_id, tl.LaneId()), duration)
-	l := NewTestingLane(childCtx)
+	l := deriveTestingLane(childCtx, tl.tees)
 
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
@@ -277,6 +310,23 @@ func (tl *testingLane) EnableStackTrace(level LaneLogLevel, enable bool) bool {
 
 func (tl *testingLane) LaneId() string {
 	return tl.Value(testing_lane_id).(string)
+}
+
+func (tl *testingLane) AddTee(l Lane) {
+	tl.mu.Lock()
+	tl.tees = append(tl.tees, l)
+	tl.mu.Unlock()
+}
+
+func (tl *testingLane) RemoveTee(l Lane) {
+	tl.mu.Lock()
+	for i, t := range tl.tees {
+		if t.LaneId() == l.LaneId() {
+			tl.tees = append(tl.tees[:i], tl.tees[i+1:]...)
+			break
+		}
+	}
+	tl.mu.Unlock()
 }
 
 func (tlw *testingLogWriter) Write(p []byte) (n int, err error) {
