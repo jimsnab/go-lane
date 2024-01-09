@@ -23,11 +23,13 @@ type (
 	testingLane struct {
 		mu sync.Mutex
 		context.Context
-		Events     []*laneEvent
-		tlog       *log.Logger
-		level      LaneLogLevel
-		stackTrace []atomic.Bool
-		tees       []Lane
+		Events               []*laneEvent
+		tlog                 *log.Logger
+		level                LaneLogLevel
+		stackTrace           []atomic.Bool
+		tees                 []Lane
+		parent               *testingLane
+		WantDescendantEvents bool
 	}
 
 	testingLaneId string
@@ -41,18 +43,20 @@ type (
 		EventsToString() string
 		VerifyEvents(eventList []*laneEvent) (match bool)
 		VerifyEventText(eventText string) (match bool)
+		WantDescendantEvents(wanted bool) (prior bool)
 	}
 )
 
 const testing_lane_id testingLaneId = "testing_lane"
 
 func NewTestingLane(ctx context.Context) TestingLane {
-	return deriveTestingLane(ctx, []Lane{})
+	return deriveTestingLane(ctx, nil, []Lane{})
 }
 
-func deriveTestingLane(ctx context.Context, tees []Lane) TestingLane {
+func deriveTestingLane(ctx context.Context, parent *testingLane, tees []Lane) TestingLane {
 	tl := testingLane{
 		stackTrace: make([]atomic.Bool, int(LogLevelFatal+1)),
+		parent:     parent,
 		tees:       tees,
 	}
 
@@ -128,29 +132,51 @@ func (tl *testingLane) EventsToString() string {
 	return sb.String()
 }
 
+func (tl *testingLane) WantDescendantEvents(wanted bool) bool {
+	tl.mu.Lock()
+	prior := tl.WantDescendantEvents
+	tl.WantDescendantEvents = wanted
+	tl.mu.Unlock()
+
+	return prior
+}
+
 func (tl *testingLane) recordLaneEvent(level LaneLogLevel, levelText string, format *string, args ...any) {
+	tl.recordLaneEventRecursive(true, level, levelText, format, args...)
+}
+
+// Worker that adds the test event to the testing lane, and then passes it up to the parent,
+// where the parent decides to capture it as well, and then passes it up to the
+// grandparent, and so on.
+func (tl *testingLane) recordLaneEventRecursive(originator bool, level LaneLogLevel, levelText string, format *string, args ...any) {
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
 
-	if level >= tl.level {
-		le := laneEvent{
-			Id:    "global",
-			Level: levelText,
-		}
+	if originator || tl.WantDescendantEvents {
+		if level >= tl.level {
+			le := laneEvent{
+				Id:    "global",
+				Level: levelText,
+			}
 
-		if format == nil {
-			le.Message = fmt.Sprintln(args...)          // use Sprintln because it matches log behavior wrt spaces between args
-			le.Message = le.Message[:len(le.Message)-1] // remove \n
-		} else {
-			le.Message = fmt.Sprintf(*format, args...)
-		}
+			if format == nil {
+				le.Message = fmt.Sprintln(args...)          // use Sprintln because it matches log behavior wrt spaces between args
+				le.Message = le.Message[:len(le.Message)-1] // remove \n
+			} else {
+				le.Message = fmt.Sprintf(*format, args...)
+			}
 
-		v := tl.Value(testing_lane_id)
-		if v != nil {
-			le.Id = v.(string)
-		}
+			v := tl.Value(testing_lane_id)
+			if v != nil {
+				le.Id = v.(string)
+			}
 
-		tl.Events = append(tl.Events, &le)
+			tl.Events = append(tl.Events, &le)
+		}
+	}
+
+	if tl.parent != nil {
+		tl.parent.recordLaneEventRecursive(false, level, levelText, format, args...)
 	}
 }
 
@@ -252,7 +278,7 @@ func (tl *testingLane) Close() {
 }
 
 func (tl *testingLane) Derive() Lane {
-	l := deriveTestingLane(context.WithValue(tl.Context, parent_lane_id, tl.LaneId()), tl.tees)
+	l := deriveTestingLane(context.WithValue(tl.Context, parent_lane_id, tl.LaneId()), tl, tl.tees)
 
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
@@ -263,7 +289,7 @@ func (tl *testingLane) Derive() Lane {
 
 func (tl *testingLane) DeriveWithCancel() (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithCancel(context.WithValue(tl.Context, parent_lane_id, tl.LaneId()))
-	l := deriveTestingLane(childCtx, tl.tees)
+	l := deriveTestingLane(childCtx, tl, tl.tees)
 
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
@@ -274,7 +300,7 @@ func (tl *testingLane) DeriveWithCancel() (Lane, context.CancelFunc) {
 
 func (tl *testingLane) DeriveWithDeadline(deadline time.Time) (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithDeadline(context.WithValue(tl.Context, parent_lane_id, tl.LaneId()), deadline)
-	l := deriveTestingLane(childCtx, tl.tees)
+	l := deriveTestingLane(childCtx, tl, tl.tees)
 
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
@@ -285,7 +311,7 @@ func (tl *testingLane) DeriveWithDeadline(deadline time.Time) (Lane, context.Can
 
 func (tl *testingLane) DeriveWithTimeout(duration time.Duration) (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithTimeout(context.WithValue(tl.Context, parent_lane_id, tl.LaneId()), duration)
-	l := deriveTestingLane(childCtx, tl.tees)
+	l := deriveTestingLane(childCtx, tl, tl.tees)
 
 	tl.mu.Lock()
 	defer tl.mu.Unlock()

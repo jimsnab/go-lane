@@ -79,6 +79,11 @@ occur during the test.
 * `NewTestingLane` captures log messages into a buffer and provides `VerifyEvents()`,
   `VerifyEventText()` and `EventsToString()` for use in unit test code that checks the log to confirm
   an expected result.
+
+  A testing lane also has the API `WantDescendantEvents()` to enable (or disable) capture of
+  derived testing lane activity. This is useful to verify a child task reaches an expected
+  logging point.
+
 * `NewNullLane` creates a lane that does not log but still has the context functionality.
   Logging is similar to `log.SetOutput(io.Discard)` - fatal errors still terminate the app.
 

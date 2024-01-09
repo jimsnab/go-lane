@@ -598,6 +598,54 @@ func TestLaneDerived(t *testing.T) {
 	}
 }
 
+func TestLaneDerivedCaptureChild(t *testing.T) {
+	ptl := NewTestingLane(context.Background())
+	tl := ptl.Derive().(TestingLane)
+	prior := ptl.WantDescendantEvents(true)
+	if prior {
+		t.Error("unexpected prior value")
+	}
+	prior = ptl.WantDescendantEvents(true)
+	if !prior {
+		t.Error("unexpected prior value")
+	}
+
+	ptl.Logger().Println("this is the parent")
+	tl.Logger().Println("this is the child")
+
+	if !ptl.VerifyEventText("INFO\tthis is the parent\nINFO\tthis is the child") {
+		t.Errorf("Test events don't match")
+	}
+
+	if !tl.VerifyEventText("INFO\tthis is the child") {
+		t.Errorf("Test events don't match")
+	}
+}
+
+func TestLaneDerivedCaptureGrandchild(t *testing.T) {
+	gptl := NewTestingLane(context.Background())
+	ptl := gptl.Derive().(TestingLane)
+	tl := ptl.Derive().(TestingLane)
+
+	gptl.WantDescendantEvents(true)
+
+	gptl.Logger().Println("this is the grandparent")
+	ptl.Logger().Println("this is the parent")
+	tl.Logger().Println("this is the child")
+
+	if !gptl.VerifyEventText("INFO\tthis is the grandparent\nINFO\tthis is the parent\nINFO\tthis is the child") {
+		t.Errorf("Test events don't match")
+	}
+
+	if !ptl.VerifyEventText("INFO\tthis is the parent") {
+		t.Errorf("Test events don't match")
+	}
+
+	if !tl.VerifyEventText("INFO\tthis is the child") {
+		t.Errorf("Test events don't match")
+	}
+}
+
 func TestLogLane(t *testing.T) {
 	ll := NewLogLane(context.Background())
 
