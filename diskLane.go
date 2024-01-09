@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"os"
-	"sync/atomic"
 	"syscall"
 )
 
@@ -16,7 +15,7 @@ type (
 )
 
 func NewDiskLane(ctx context.Context, logFile string) (l Lane, err error) {
-	ll := deriveLogLane(ctx, []Lane{}, "")
+	ll := deriveLogLane(nil, ctx, []Lane{}, "")
 
 	f, err := os.OpenFile(logFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
@@ -34,8 +33,7 @@ func NewDiskLane(ctx context.Context, logFile string) (l Lane, err error) {
 }
 
 func (dl *diskLane) Derive() Lane {
-	ll := deriveLogLane(context.WithValue(dl.Context, parent_lane_id, dl.LaneId()), dl.tees, dl.cr)
-	ll.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&ll.level)))
+	ll := deriveLogLane(nil, context.WithValue(dl.Context, parent_lane_id, dl.LaneId()), dl.tees, dl.cr)
 
 	newFd, err := syscall.Dup(int(dl.f.Fd()))
 	if err != nil {
@@ -43,7 +41,8 @@ func (dl *diskLane) Derive() Lane {
 	}
 	f2 := os.NewFile(uintptr(newFd), dl.f.Name())
 
-	dl2 := diskLane{logLane: *ll, f: f2}
+	dl2 := diskLane{f: f2}
+	ll.clone(&dl2.logLane)
 	dl2.logLane.writer = log.New(f2, "", 0)
 	return &dl2
 }

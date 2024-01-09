@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type testKeyType string
@@ -673,6 +675,53 @@ func TestLogLane(t *testing.T) {
 
 	if ctx.Value(kTestStr).(string) != "pass" {
 		t.Errorf("Context is not working")
+	}
+}
+
+func TestLogLaneJourneyId(t *testing.T) {
+	ll := NewLogLane(context.Background())
+	id := uuid.New().String()
+	id = id[len(id)-10:]
+	ll.SetJourneyId(id)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll.Info("test", "of", "info")
+
+	capture := buf.String()
+	if !strings.Contains(capture, id) {
+		t.Error("did not find outer correlation id")
+	}
+	if !strings.Contains(capture, ll.LaneId()) {
+		t.Error("did not find lane correlation id")
+	}
+}
+
+func TestLogLaneJourneyIdDerived(t *testing.T) {
+	ll := NewLogLane(context.Background())
+	id := uuid.New().String()
+	id = id[len(id)-10:]
+	ll.SetJourneyId(id)
+
+	ll2 := ll.Derive()
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll2.Info("test", "of", "info")
+
+	capture := buf.String()
+	if !strings.Contains(capture, id) {
+		t.Error("did not find outer correlation id")
+	}
+	if strings.Contains(capture, ll.LaneId()) {
+		t.Error("found unexpected correlation id")
+	}
+	if !strings.Contains(capture, ll2.LaneId()) {
+		t.Error("did not find lane correlation id")
 	}
 }
 

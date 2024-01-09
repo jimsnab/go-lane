@@ -46,6 +46,10 @@ func deriveNullLane(ctx context.Context, tees []Lane) Lane {
 	return &nl
 }
 
+func (nl *nullLane) SetJourneyId(id string) {
+	// null lane does not format a log message, so the correlation ID is ignored
+}
+
 func (nl *nullLane) SetLogLevel(newLevel LaneLogLevel) (priorLevel LaneLogLevel) {
 	level := int32(newLevel)
 	priorLevel = LaneLogLevel(atomic.SwapInt32(&nl.level, level))

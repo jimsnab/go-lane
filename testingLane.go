@@ -68,6 +68,10 @@ func deriveTestingLane(ctx context.Context, parent *testingLane, tees []Lane) Te
 	return &tl
 }
 
+func (tl *testingLane) SetJourneyId(id string) {
+	// testing lane does not format a log message, so the correlation ID is ignored
+}
+
 func (tl *testingLane) SetLogLevel(newLevel LaneLogLevel) (priorLevel LaneLogLevel) {
 	tl.mu.Lock()
 	defer tl.mu.Unlock()

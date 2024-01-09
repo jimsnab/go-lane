@@ -31,6 +31,7 @@ func someFunc(l lane.Lane) {
 Lane interface {
 	context.Context
 	LaneId() string
+	SetJourneyId(id string)
 	SetLogLevel(newLevel LaneLogLevel) (priorLevel LaneLogLevel)
 	Trace(args ...any)
 	Tracef(format string, args ...any)
@@ -67,6 +68,14 @@ logged message.
 
 When spawining go routines, pass `l` around, or use one of the Derive functions when
 a new correlation ID is needed.
+
+Optionally, an "outer ID" can be assigned with `SetJourneyId()`. This function is useful
+to correlate a transaction that involves many lanes, or to correlate with an externally
+generated ID. The journey id is inherited by derived lanes.
+
+For example, a front end might generate a journey ID, passing it with its REST
+request to a go server that logs its activity via lanes. By setting the journey ID to
+what the front end has generated, the lanes will be correlated with front end logging.
 
 Another lane can "tee" from a source lane. For example, it might be desired to tee a
 testing lane from a logging lane, and then a unit test can verify certain log messages

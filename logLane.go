@@ -16,7 +16,7 @@ import (
 
 type (
 	logLane struct {
-		// Be sure to update clone() if modifying this struct
+		// !!! Be sure to update clone() if modifying this struct
 		context.Context
 		wlog       *log.Logger
 		writer     *log.Logger
@@ -25,6 +25,8 @@ type (
 		stackTrace []atomic.Bool
 		mu         sync.Mutex
 		tees       []Lane
+		journeyId  string
+		// !!! Be sure to update clone() if modifying this struct
 	}
 
 	wrappedLogWriter struct {
@@ -45,14 +47,19 @@ func isLogCrLf() bool {
 }
 
 func NewLogLane(ctx context.Context) Lane {
-	return deriveLogLane(ctx, []Lane{}, "")
+	return deriveLogLane(nil, ctx, []Lane{}, "")
 }
 
-func deriveLogLane(ctx context.Context, tees []Lane, cr string) *logLane {
+func deriveLogLane(parent *logLane, ctx context.Context, tees []Lane, cr string) *logLane {
 	ll := logLane{
 		stackTrace: make([]atomic.Bool, int(LogLevelFatal+1)),
 		tees:       tees,
 		cr:         cr,
+	}
+
+	if parent != nil {
+		ll.journeyId = parent.journeyId
+		ll.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&parent.level)))
 	}
 
 	// make a logging instance that ultimately does logging via the lane
@@ -76,6 +83,7 @@ func (ll *logLane) clone(ll2 *logLane) {
 	ll2.cr = ll.cr
 	ll2.stackTrace = ll.stackTrace
 	ll2.tees = ll.tees
+	ll2.journeyId = ll.journeyId
 }
 
 // For cases where \r\n line endings are required (ex: vscode terminal)
@@ -84,7 +92,16 @@ func NewLogLaneWithCR(ctx context.Context) Lane {
 	if !isLogCrLf() {
 		cr = "\r"
 	}
-	return deriveLogLane(ctx, []Lane{}, cr)
+	return deriveLogLane(nil, ctx, []Lane{}, cr)
+}
+
+// Adds an ID to the log message(s)
+func (ll *logLane) SetJourneyId(id string) {
+	if len(id) > 10 {
+		ll.journeyId = id[:10]
+	} else {
+		ll.journeyId = id
+	}
 }
 
 func sprint(args ...any) string {
@@ -101,8 +118,12 @@ func (ll *logLane) SetLogLevel(newLevel LaneLogLevel) (priorLevel LaneLogLevel) 
 	return
 }
 
-func (ll *logLane) getLaneId(level string) string {
-	return fmt.Sprintf("%s {%s}", level, ll.LaneId())
+func (ll *logLane) getMesagePrefix(level string) string {
+	if ll.journeyId != "" {
+		return fmt.Sprintf("%s {%s:%s}", level, ll.journeyId, ll.LaneId())
+	} else {
+		return fmt.Sprintf("%s {%s}", level, ll.LaneId())
+	}
 }
 
 func (ll *logLane) shouldLog(level LaneLogLevel) bool {
@@ -120,7 +141,7 @@ func (ll *logLane) tee(logger func(l Lane)) {
 
 func (ll *logLane) Trace(args ...any) {
 	if ll.shouldLog(LogLevelTrace) {
-		ll.writer.Printf("%s %s%s", ll.getLaneId("TRACE"), sprint(args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("TRACE"), sprint(args...), ll.cr)
 		ll.logStack(LogLevelTrace)
 	}
 	ll.tee(func(l Lane) { l.Trace(args...) })
@@ -128,7 +149,7 @@ func (ll *logLane) Trace(args ...any) {
 
 func (ll *logLane) Tracef(format string, args ...any) {
 	if ll.shouldLog(LogLevelTrace) {
-		ll.writer.Printf("%s %s%s", ll.getLaneId("TRACE"), fmt.Sprintf(format, args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("TRACE"), fmt.Sprintf(format, args...), ll.cr)
 		ll.logStack(LogLevelTrace)
 	}
 	ll.tee(func(l Lane) { l.Tracef(format, args...) })
@@ -136,7 +157,7 @@ func (ll *logLane) Tracef(format string, args ...any) {
 
 func (ll *logLane) Debug(args ...any) {
 	if ll.shouldLog(LogLevelDebug) {
-		ll.writer.Printf("%s %s%s", ll.getLaneId("DEBUG"), sprint(args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("DEBUG"), sprint(args...), ll.cr)
 		ll.logStack(LogLevelDebug)
 	}
 	ll.tee(func(l Lane) { l.Debug(args...) })
@@ -144,7 +165,7 @@ func (ll *logLane) Debug(args ...any) {
 
 func (ll *logLane) Debugf(format string, args ...any) {
 	if ll.shouldLog(LogLevelDebug) {
-		ll.writer.Printf("%s %s%s", ll.getLaneId("DEBUG"), fmt.Sprintf(format, args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("DEBUG"), fmt.Sprintf(format, args...), ll.cr)
 		ll.logStack(LogLevelDebug)
 	}
 	ll.tee(func(l Lane) { l.Debugf(format, args...) })
@@ -152,7 +173,7 @@ func (ll *logLane) Debugf(format string, args ...any) {
 
 func (ll *logLane) Info(args ...any) {
 	if ll.shouldLog(LogLevelInfo) {
-		ll.writer.Printf("%s %s%s", ll.getLaneId("INFO"), sprint(args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("INFO"), sprint(args...), ll.cr)
 		ll.logStack(LogLevelInfo)
 	}
 	ll.tee(func(l Lane) { l.Info(args...) })
@@ -160,7 +181,7 @@ func (ll *logLane) Info(args ...any) {
 
 func (ll *logLane) Infof(format string, args ...any) {
 	if ll.shouldLog(LogLevelInfo) {
-		ll.writer.Printf("%s %s%s", ll.getLaneId("INFO"), fmt.Sprintf(format, args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("INFO"), fmt.Sprintf(format, args...), ll.cr)
 		ll.logStack(LogLevelInfo)
 	}
 	ll.tee(func(l Lane) { l.Infof(format, args...) })
@@ -168,7 +189,7 @@ func (ll *logLane) Infof(format string, args ...any) {
 
 func (ll *logLane) Warn(args ...any) {
 	if ll.shouldLog(LogLevelWarn) {
-		ll.writer.Printf("%s %s%s", ll.getLaneId("WARN"), sprint(args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("WARN"), sprint(args...), ll.cr)
 		ll.logStack(LogLevelWarn)
 	}
 	ll.tee(func(l Lane) { l.Warn(args...) })
@@ -176,7 +197,7 @@ func (ll *logLane) Warn(args ...any) {
 
 func (ll *logLane) Warnf(format string, args ...any) {
 	if ll.shouldLog(LogLevelWarn) {
-		ll.writer.Printf("%s %s%s", ll.getLaneId("WARN"), fmt.Sprintf(format, args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("WARN"), fmt.Sprintf(format, args...), ll.cr)
 		ll.logStack(LogLevelWarn)
 	}
 	ll.tee(func(l Lane) { l.Warnf(format, args...) })
@@ -184,7 +205,7 @@ func (ll *logLane) Warnf(format string, args ...any) {
 
 func (ll *logLane) Error(args ...any) {
 	if ll.shouldLog(LogLevelError) {
-		ll.writer.Printf("%s %s%s", ll.getLaneId("ERROR"), sprint(args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("ERROR"), sprint(args...), ll.cr)
 		ll.logStack(LogLevelError)
 	}
 	ll.tee(func(l Lane) { l.Error(args...) })
@@ -192,7 +213,7 @@ func (ll *logLane) Error(args ...any) {
 
 func (ll *logLane) Errorf(format string, args ...any) {
 	if ll.shouldLog(LogLevelError) {
-		ll.writer.Printf("%s %s%s", ll.getLaneId("ERROR"), fmt.Sprintf(format, args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("ERROR"), fmt.Sprintf(format, args...), ll.cr)
 		ll.logStack(LogLevelError)
 	}
 	ll.tee(func(l Lane) { l.Errorf(format, args...) })
@@ -200,7 +221,7 @@ func (ll *logLane) Errorf(format string, args ...any) {
 
 func (ll *logLane) PreFatal(args ...any) {
 	if ll.shouldLog(LogLevelFatal) {
-		ll.writer.Printf("%s %s%s", ll.getLaneId("FATAL"), sprint(args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("FATAL"), sprint(args...), ll.cr)
 		ll.logStack(LogLevelFatal)
 	}
 	ll.tee(func(l Lane) { l.PreFatal(args...) })
@@ -208,7 +229,7 @@ func (ll *logLane) PreFatal(args ...any) {
 
 func (ll *logLane) PreFatalf(format string, args ...any) {
 	if ll.shouldLog(LogLevelFatal) {
-		ll.writer.Printf("%s %s%s", ll.getLaneId("FATAL"), fmt.Sprintf(format, args...), ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("FATAL"), fmt.Sprintf(format, args...), ll.cr)
 		ll.logStack(LogLevelFatal)
 	}
 	ll.tee(func(l Lane) { l.PreFatalf(format, args...) })
@@ -233,7 +254,7 @@ func (ll *logLane) logStack(level LaneLogLevel) {
 		// skip five lines: the first line (goroutine label), plus the logStack() and logging API,
 		// each has two lines (the function name on one line, followed by source info on the next line)
 		for n := 5; n < len(lines); n++ {
-			ll.writer.Printf("%s %s%s", ll.getLaneId("STACK"), lines[n], ll.cr)
+			ll.writer.Printf("%s %s%s", ll.getMesagePrefix("STACK"), lines[n], ll.cr)
 		}
 	}
 }
@@ -246,36 +267,29 @@ func (ll *logLane) Close() {
 }
 
 func (ll *logLane) Derive() Lane {
-	l := deriveLogLane(context.WithValue(ll.Context, parent_lane_id, ll.LaneId()), ll.tees, ll.cr)
-	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&ll.level)))
-	return l
+	return deriveLogLane(ll, context.WithValue(ll.Context, parent_lane_id, ll.LaneId()), ll.tees, ll.cr)
 }
 
 func (ll *logLane) DeriveWithCancel() (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithCancel(context.WithValue(ll.Context, parent_lane_id, ll.LaneId()))
-	l := deriveLogLane(childCtx, ll.tees, ll.cr)
-	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&ll.level)))
+	l := deriveLogLane(ll, childCtx, ll.tees, ll.cr)
 	return l, cancelFn
 }
 
 func (ll *logLane) DeriveWithDeadline(deadline time.Time) (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithDeadline(context.WithValue(ll.Context, parent_lane_id, ll.LaneId()), deadline)
-	l := deriveLogLane(childCtx, ll.tees, ll.cr)
-	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&ll.level)))
+	l := deriveLogLane(ll, childCtx, ll.tees, ll.cr)
 	return l, cancelFn
 }
 
 func (ll *logLane) DeriveWithTimeout(duration time.Duration) (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithTimeout(context.WithValue(ll.Context, parent_lane_id, ll.LaneId()), duration)
-	l := deriveLogLane(childCtx, ll.tees, ll.cr)
-	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&ll.level)))
+	l := deriveLogLane(ll, childCtx, ll.tees, ll.cr)
 	return l, cancelFn
 }
 
 func (ll *logLane) DeriveReplaceContext(ctx context.Context) Lane {
-	l := deriveLogLane(ctx, ll.tees, ll.cr)
-	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&ll.level)))
-	return l
+	return deriveLogLane(ll, ctx, ll.tees, ll.cr)
 }
 
 func (ll *logLane) LaneId() string {
