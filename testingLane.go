@@ -29,7 +29,7 @@ type (
 		stackTrace           []atomic.Bool
 		tees                 []Lane
 		parent               *testingLane
-		WantDescendantEvents bool
+		wantDescendantEvents bool
 	}
 
 	testingLaneId string
@@ -134,8 +134,8 @@ func (tl *testingLane) EventsToString() string {
 
 func (tl *testingLane) WantDescendantEvents(wanted bool) bool {
 	tl.mu.Lock()
-	prior := tl.WantDescendantEvents
-	tl.WantDescendantEvents = wanted
+	prior := tl.wantDescendantEvents
+	tl.wantDescendantEvents = wanted
 	tl.mu.Unlock()
 
 	return prior
@@ -152,7 +152,7 @@ func (tl *testingLane) recordLaneEventRecursive(originator bool, level LaneLogLe
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
 
-	if originator || tl.WantDescendantEvents {
+	if originator || tl.wantDescendantEvents {
 		if level >= tl.level {
 			le := laneEvent{
 				Id:    "global",
