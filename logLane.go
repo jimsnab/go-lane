@@ -18,8 +18,8 @@ type (
 	logLane struct {
 		// !!! Be sure to update clone() if modifying this struct
 		context.Context
-		wlog       *log.Logger
-		writer     *log.Logger
+		wlog       *log.Logger // wrapper log to capture caller's logging intent without sending to output
+		writer     *log.Logger // the log instance used for output
 		level      int32
 		cr         string
 		stackTrace []atomic.Bool
@@ -57,15 +57,17 @@ func deriveLogLane(parent *logLane, ctx context.Context, tees []Lane, cr string)
 		cr:         cr,
 	}
 
-	if parent != nil {
-		ll.journeyId = parent.journeyId
-		ll.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&parent.level)))
-	}
-
 	// make a logging instance that ultimately does logging via the lane
 	wlw := wrappedLogWriter{ll: &ll}
 	ll.writer = log.Default()
 	ll.wlog = log.New(&wlw, "", 0)
+
+	if parent != nil {
+		ll.journeyId = parent.journeyId
+		ll.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&parent.level)))
+		ll.wlog.SetFlags(parent.wlog.Flags())
+		ll.wlog.SetPrefix(parent.wlog.Prefix())
+	}
 
 	id := uuid.New().String()
 	id = id[len(id)-10:]
@@ -127,7 +129,16 @@ func (ll *logLane) getMesagePrefix(level string) string {
 }
 
 func (ll *logLane) shouldLog(level LaneLogLevel) bool {
-	return atomic.LoadInt32(&ll.level) <= int32(level)
+	if atomic.LoadInt32(&ll.level) <= int32(level) {
+		// the log wrapper is exposed to the client, so ensure changes
+		// made to prefix and flags are copied into the instance
+		// generating the output
+		ll.writer.SetPrefix(ll.wlog.Prefix())
+		ll.writer.SetFlags(ll.wlog.Flags())
+		return true
+	}
+
+	return false
 }
 
 func (ll *logLane) tee(logger func(l Lane)) {

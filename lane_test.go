@@ -1806,3 +1806,75 @@ func TestLogLaneWithCrDeriveWithCancel(t *testing.T) {
 		t.Error("\\r not found in derived lane")
 	}
 }
+
+func TestLogLaneWithMicroseconds(t *testing.T) {
+	ll := NewLogLane(context.Background())
+
+	ll.Logger().SetFlags(ll.Logger().Flags() | log.Ldate | log.Lmicroseconds)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll.Info("testing 123")
+
+	capture := buf.String()
+	match, _ := regexp.MatchString(`\d+/\d+/\d+ \d+:\d+:\d+\.\d+`, capture)
+	if !match {
+		t.Errorf("did not find microseconds in %s", capture)
+	}
+}
+
+func TestLogLaneWithMicrosecondsDerive(t *testing.T) {
+	ll := NewLogLane(context.Background())
+
+	ll.Logger().SetFlags(ll.Logger().Flags() | log.Ldate | log.Lmicroseconds)
+	ll2 := ll.Derive()
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll2.Info("testing 123")
+
+	capture := buf.String()
+	match, _ := regexp.MatchString(`\d+/\d+/\d+ \d+:\d+:\d+\.\d+`, capture)
+	if !match {
+		t.Errorf("did not find microseconds in %s", capture)
+	}
+}
+
+func TestLogLaneWithPrefix(t *testing.T) {
+	ll := NewLogLane(context.Background())
+
+	ll.Logger().SetPrefix("myprefix")
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll.Info("testing 123")
+
+	capture := buf.String()
+	if !strings.Contains(capture, "myprefix") {
+		t.Errorf("did not find prefix in %s", capture)
+	}
+}
+
+func TestLogLaneWithPrefixDerive(t *testing.T) {
+	ll := NewLogLane(context.Background())
+
+	ll.Logger().SetPrefix("myprefix")
+	ll2 := ll.Derive()
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll2.Info("testing 123")
+
+	capture := buf.String()
+	if !strings.Contains(capture, "myprefix") {
+		t.Errorf("did not find prefix in %s", capture)
+	}
+}
