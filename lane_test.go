@@ -1774,3 +1774,35 @@ func TestDiskLaneBadPath(t *testing.T) {
 		t.Fatal("make test.log")
 	}
 }
+
+func TestLogLanePlainDeriveWithCancel(t *testing.T) {
+	ll := NewLogLane(context.Background())
+	ll2, _ := ll.DeriveWithCancel()
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll2.Info("testing 123")
+
+	capture := buf.String()
+	if !strings.HasSuffix(capture, "testing 123\n") {
+		t.Error("\\r found in derived lane")
+	}
+}
+
+func TestLogLaneWithCrDeriveWithCancel(t *testing.T) {
+	ll := NewLogLaneWithCR(context.Background())
+	ll2, _ := ll.DeriveWithCancel()
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll2.Info("testing 123")
+
+	capture := buf.String()
+	if !strings.HasSuffix(capture, "testing 123\r\n") {
+		t.Error("\\r not found in derived lane")
+	}
+}
