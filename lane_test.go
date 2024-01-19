@@ -1878,3 +1878,19 @@ func TestLogLaneWithPrefixDerive(t *testing.T) {
 		t.Errorf("did not find prefix in %s", capture)
 	}
 }
+
+func TestLogLaneDateTimeDefault(t *testing.T) {
+	ll := NewLogLane(context.Background())
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll.Info("testing 123")
+
+	capture := buf.String()
+	match, _ := regexp.MatchString(`\d+/\d+/\d+ \d+:\d+:\d+\ `, capture)
+	if !match {
+		t.Errorf("did not find date/time in %s", capture)
+	}
+}

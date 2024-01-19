@@ -67,6 +67,8 @@ func deriveLogLane(parent *logLane, ctx context.Context, tees []Lane, cr string)
 		ll.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&parent.level)))
 		ll.wlog.SetFlags(parent.wlog.Flags())
 		ll.wlog.SetPrefix(parent.wlog.Prefix())
+	} else {
+		ll.wlog.SetFlags(log.LstdFlags)
 	}
 
 	id := uuid.New().String()
