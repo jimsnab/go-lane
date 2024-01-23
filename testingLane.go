@@ -14,7 +14,7 @@ import (
 )
 
 type (
-	laneEvent struct {
+	LaneEvent struct {
 		Id      string
 		Level   string
 		Message string
@@ -23,7 +23,7 @@ type (
 	testingLane struct {
 		mu sync.Mutex
 		context.Context
-		Events               []*laneEvent
+		Events               []*LaneEvent
 		tlog                 *log.Logger
 		level                LaneLogLevel
 		stackTrace           []atomic.Bool
@@ -40,9 +40,29 @@ type (
 
 	TestingLane interface {
 		Lane
+
+		// Renders all of the captured log messages into a single string.
 		EventsToString() string
-		VerifyEvents(eventList []*laneEvent) (match bool)
+
+		// Checks for log messages to exactly match the specified events.
+		VerifyEvents(eventList []*LaneEvent) (match bool)
+
+		// Checks for log messages to match the specified events. Ignores
+		// log events that do not match.
+		FindEvents(eventList []*LaneEvent) (found bool)
+
+		// Uses a descriptor to create an event list, then calls VerifyEvents.
+		// The descriptor is a simple format where log messages are separated
+		// by line breaks, and each line is "SEVERITY\tExpected message". The
+		// other details that get logged, such as timestamp and correlation ID,
+		// are ignored.
 		VerifyEventText(eventText string) (match bool)
+
+		// Similar to VerifyEventText, except that lines that do not match
+		// are ignored.
+		FindEventText(eventText string) (found bool)
+
+		// Controls whether to capture child lane activity (wanted=true) or not.
 		WantDescendantEvents(wanted bool) (prior bool)
 	}
 )
@@ -81,7 +101,7 @@ func (tl *testingLane) SetLogLevel(newLevel LaneLogLevel) (priorLevel LaneLogLev
 	return
 }
 
-func (tl *testingLane) VerifyEvents(eventList []*laneEvent) bool {
+func (tl *testingLane) VerifyEvents(eventList []*LaneEvent) bool {
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
 
@@ -102,10 +122,34 @@ func (tl *testingLane) VerifyEvents(eventList []*laneEvent) bool {
 	return true
 }
 
+func (tl *testingLane) FindEvents(eventList []*LaneEvent) bool {
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+
+	pos := 0
+	for _, e1 := range eventList {
+		found := false
+		for i := pos; i < len(tl.Events); i++ {
+			e2 := tl.Events[i]
+			if e1.Level == e2.Level && e1.Message == e2.Message {
+				pos = i + 1
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return false
+		}
+	}
+
+	return true
+}
+
 // eventText specifies a list of events, separated by \n, and each
 // line must be in the form of <level>\t<message>.
 func (tl *testingLane) VerifyEventText(eventText string) (match bool) {
-	eventList := []*laneEvent{}
+	eventList := []*LaneEvent{}
 
 	if eventText != "" {
 		lines := strings.Split(eventText, "\n")
@@ -114,11 +158,30 @@ func (tl *testingLane) VerifyEventText(eventText string) (match bool) {
 			if len(parts) != 2 {
 				panic("eventText line must have exactly one tab separator")
 			}
-			eventList = append(eventList, &laneEvent{Level: parts[0], Message: parts[1]})
+			eventList = append(eventList, &LaneEvent{Level: parts[0], Message: parts[1]})
 		}
 	}
 
 	return tl.VerifyEvents(eventList)
+}
+
+// eventText specifies a list of events, separated by \n, and each
+// line must be in the form of <level>\t<message>.
+func (tl *testingLane) FindEventText(eventText string) (found bool) {
+	eventList := []*LaneEvent{}
+
+	if eventText != "" {
+		lines := strings.Split(eventText, "\n")
+		for _, line := range lines {
+			parts := strings.Split(line, "\t")
+			if len(parts) != 2 {
+				panic("eventText line must have exactly one tab separator")
+			}
+			eventList = append(eventList, &LaneEvent{Level: parts[0], Message: parts[1]})
+		}
+	}
+
+	return tl.FindEvents(eventList)
 }
 
 func (tl *testingLane) EventsToString() string {
@@ -158,7 +221,7 @@ func (tl *testingLane) recordLaneEventRecursive(originator bool, level LaneLogLe
 
 	if originator || tl.wantDescendantEvents {
 		if level >= tl.level {
-			le := laneEvent{
+			le := LaneEvent{
 				Id:    "global",
 				Level: levelText,
 			}

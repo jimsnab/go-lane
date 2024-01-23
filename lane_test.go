@@ -30,34 +30,42 @@ func TestLane(t *testing.T) {
 
 	ctx := context.WithValue(tl, kTestStr, "pass")
 
-	events := []*laneEvent{}
+	events := []*LaneEvent{}
+	events2 := []*LaneEvent{}
 	tl.Trace("test", "of", "trace")
-	events = append(events, &laneEvent{Level: "TRACE", Message: "test of trace"})
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "test of trace"})
 	tl.Tracef("testing %d", 123)
-	events = append(events, &laneEvent{Level: "TRACE", Message: "testing 123"})
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "testing 123"})
 
 	tl.Debug("test", "of", "debug")
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "test of debug"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "test of debug"})
+	events2 = append(events2, &LaneEvent{Level: "DEBUG", Message: "test of debug"})
 	tl.Debugf("testing %d", 456)
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "testing 456"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "testing 456"})
 
 	tl.Info("test", "of", "info")
-	events = append(events, &laneEvent{Level: "INFO", Message: "test of info"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "test of info"})
 	tl.Infof("testing %d", 789)
-	events = append(events, &laneEvent{Level: "INFO", Message: "testing 789"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "testing 789"})
+	events2 = append(events2, &LaneEvent{Level: "INFO", Message: "testing 789"})
 
 	tl.Warn("test", "of", "warn")
-	events = append(events, &laneEvent{Level: "WARN", Message: "test of warn"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "test of warn"})
 	tl.Warnf("testing %d", 1011)
-	events = append(events, &laneEvent{Level: "WARN", Message: "testing 1011"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "testing 1011"})
 
 	tl.Error("test", "of", "error")
-	events = append(events, &laneEvent{Level: "ERROR", Message: "test of error"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "test of error"})
 	tl.Errorf("testing %d", 1213)
-	events = append(events, &laneEvent{Level: "ERROR", Message: "testing 1213"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "testing 1213"})
+	events2 = append(events2, &LaneEvent{Level: "ERROR", Message: "testing 1213"})
 
-	if !tl.VerifyEvents(events) {
+	if !tl.VerifyEvents(events) || tl.VerifyEvents(events2) {
 		t.Errorf("Test events don't match")
+	}
+
+	if !tl.FindEvents(events) || !tl.FindEvents(events2) {
+		t.Errorf("Test events don't match 2")
 	}
 
 	if ctx.Value(kTestStr) != string("pass") {
@@ -310,6 +318,52 @@ ERROR	testing 1213`
 
 	if tl.EventsToString() != expected {
 		t.Errorf("Test event string doesn't match")
+	}
+}
+
+func TestLaneFindText(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+
+	tl.Trace("test", "of", "trace")
+	tl.Tracef("testing %d", 123)
+
+	tl.Debug("test", "of", "debug")
+	tl.Debugf("testing %d", 456)
+
+	tl.Info("test", "of", "info")
+	tl.Infof("testing %d", 789)
+
+	tl.Warn("test", "of", "warn")
+	tl.Warnf("testing %d", 1011)
+
+	tl.Error("test", "of", "error")
+	tl.Errorf("testing %d", 1213)
+
+	expected1 := `TRACE	test of trace
+DEBUG	test of debug
+INFO	test of info
+INFO	testing 789
+WARN	testing 1011
+ERROR	testing 1213`
+
+	if tl.VerifyEventText(expected1) {
+		t.Errorf("Test events don't match")
+	}
+
+	if !tl.FindEventText(expected1) {
+		t.Errorf("Test events don't match")
+	}
+
+	// out of order log messages will not match
+	expected2 := `TRACE	test of trace
+INFO	test of info
+DEBUG	test of debug
+INFO	testing 789
+WARN	testing 1011
+ERROR	testing 1213`
+
+	if tl.FindEventText(expected2) {
+		t.Errorf("Test events don't match")
 	}
 }
 

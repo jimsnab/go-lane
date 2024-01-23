@@ -25,24 +25,24 @@ func TestTeeLog(t *testing.T) {
 	ll.PreFatal("fatal", 1)
 	ll.PreFatalf("%s %d", "fatalf", 1)
 
-	events := []*laneEvent{}
-	events = append(events, &laneEvent{Level: "TRACE", Message: "trace 1"})
-	events = append(events, &laneEvent{Level: "TRACE", Message: "tracef 1"})
+	events := []*LaneEvent{}
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "trace 1"})
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "tracef 1"})
 
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "debug 1"})
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "debugf 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debug 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debugf 1"})
 
-	events = append(events, &laneEvent{Level: "INFO", Message: "info 1"})
-	events = append(events, &laneEvent{Level: "INFO", Message: "infof 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "info 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "infof 1"})
 
-	events = append(events, &laneEvent{Level: "WARN", Message: "warn 1"})
-	events = append(events, &laneEvent{Level: "WARN", Message: "warnf 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warn 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warnf 1"})
 
-	events = append(events, &laneEvent{Level: "ERROR", Message: "error 1"})
-	events = append(events, &laneEvent{Level: "ERROR", Message: "errorf 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "error 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "errorf 1"})
 
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatal 1"})
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatalf 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatal 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatalf 1"})
 
 	if !tl.VerifyEvents(events) {
 		t.Errorf("Test events don't match")
@@ -76,24 +76,24 @@ func TestTeeLogDerive(t *testing.T) {
 	ll5.PreFatal("fatal", 1)
 	ll5.PreFatalf("%s %d", "fatalf", 1)
 
-	events := []*laneEvent{}
-	events = append(events, &laneEvent{Level: "TRACE", Message: "trace 1"})
-	events = append(events, &laneEvent{Level: "TRACE", Message: "tracef 1"})
+	events := []*LaneEvent{}
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "trace 1"})
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "tracef 1"})
 
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "debug 1"})
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "debugf 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debug 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debugf 1"})
 
-	events = append(events, &laneEvent{Level: "INFO", Message: "info 1"})
-	events = append(events, &laneEvent{Level: "INFO", Message: "infof 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "info 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "infof 1"})
 
-	events = append(events, &laneEvent{Level: "WARN", Message: "warn 1"})
-	events = append(events, &laneEvent{Level: "WARN", Message: "warnf 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warn 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warnf 1"})
 
-	events = append(events, &laneEvent{Level: "ERROR", Message: "error 1"})
-	events = append(events, &laneEvent{Level: "ERROR", Message: "errorf 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "error 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "errorf 1"})
 
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatal 1"})
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatalf 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatal 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatalf 1"})
 
 	if !tl.VerifyEvents(events) {
 		t.Errorf("Test events don't match")
@@ -125,27 +125,27 @@ func TestTeeLogDouble(t *testing.T) {
 	ll.PreFatal("fatal", 1)
 	ll.PreFatalf("%s %d", "fatalf", 1)
 
-	events := []*laneEvent{}
-	events = append(events, &laneEvent{Level: "TRACE", Message: "trace 1"})
-	events = append(events, &laneEvent{Level: "TRACE", Message: "tracef 1"})
+	events := []*LaneEvent{}
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "trace 1"})
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "tracef 1"})
 
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "debug 1"})
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "debugf 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debug 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debugf 1"})
 
-	events = append(events, &laneEvent{Level: "INFO", Message: "info 1"})
-	events = append(events, &laneEvent{Level: "INFO", Message: "infof 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "info 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "infof 1"})
 
-	events = append(events, &laneEvent{Level: "WARN", Message: "warn 1"})
-	events = append(events, &laneEvent{Level: "WARN", Message: "warnf 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warn 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warnf 1"})
 
-	events = append(events, &laneEvent{Level: "ERROR", Message: "error 1"})
-	events = append(events, &laneEvent{Level: "ERROR", Message: "errorf 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "error 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "errorf 1"})
 
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatal 1"})
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatalf 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatal 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatalf 1"})
 
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatal 1"})
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatalf 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatal 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatalf 1"})
 
 	if !tl1.VerifyEvents(events) {
 		t.Errorf("Test events don't match")
@@ -174,24 +174,24 @@ func TestTeeNull(t *testing.T) {
 	nl.PreFatal("fatal", 1)
 	nl.PreFatalf("%s %d", "fatalf", 1)
 
-	events := []*laneEvent{}
-	events = append(events, &laneEvent{Level: "TRACE", Message: "trace 1"})
-	events = append(events, &laneEvent{Level: "TRACE", Message: "tracef 1"})
+	events := []*LaneEvent{}
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "trace 1"})
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "tracef 1"})
 
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "debug 1"})
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "debugf 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debug 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debugf 1"})
 
-	events = append(events, &laneEvent{Level: "INFO", Message: "info 1"})
-	events = append(events, &laneEvent{Level: "INFO", Message: "infof 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "info 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "infof 1"})
 
-	events = append(events, &laneEvent{Level: "WARN", Message: "warn 1"})
-	events = append(events, &laneEvent{Level: "WARN", Message: "warnf 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warn 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warnf 1"})
 
-	events = append(events, &laneEvent{Level: "ERROR", Message: "error 1"})
-	events = append(events, &laneEvent{Level: "ERROR", Message: "errorf 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "error 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "errorf 1"})
 
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatal 1"})
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatalf 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatal 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatalf 1"})
 
 	if !tl.VerifyEvents(events) {
 		t.Errorf("Test events don't match")
@@ -225,24 +225,24 @@ func TestTeeNullDerive(t *testing.T) {
 	nl5.PreFatal("fatal", 1)
 	nl5.PreFatalf("%s %d", "fatalf", 1)
 
-	events := []*laneEvent{}
-	events = append(events, &laneEvent{Level: "TRACE", Message: "trace 1"})
-	events = append(events, &laneEvent{Level: "TRACE", Message: "tracef 1"})
+	events := []*LaneEvent{}
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "trace 1"})
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "tracef 1"})
 
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "debug 1"})
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "debugf 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debug 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debugf 1"})
 
-	events = append(events, &laneEvent{Level: "INFO", Message: "info 1"})
-	events = append(events, &laneEvent{Level: "INFO", Message: "infof 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "info 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "infof 1"})
 
-	events = append(events, &laneEvent{Level: "WARN", Message: "warn 1"})
-	events = append(events, &laneEvent{Level: "WARN", Message: "warnf 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warn 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warnf 1"})
 
-	events = append(events, &laneEvent{Level: "ERROR", Message: "error 1"})
-	events = append(events, &laneEvent{Level: "ERROR", Message: "errorf 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "error 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "errorf 1"})
 
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatal 1"})
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatalf 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatal 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatalf 1"})
 
 	if !tl.VerifyEvents(events) {
 		t.Errorf("Test events don't match")
@@ -274,27 +274,27 @@ func TestTeeNullDouble(t *testing.T) {
 	nl.PreFatal("fatal", 1)
 	nl.PreFatalf("%s %d", "fatalf", 1)
 
-	events := []*laneEvent{}
-	events = append(events, &laneEvent{Level: "TRACE", Message: "trace 1"})
-	events = append(events, &laneEvent{Level: "TRACE", Message: "tracef 1"})
+	events := []*LaneEvent{}
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "trace 1"})
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "tracef 1"})
 
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "debug 1"})
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "debugf 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debug 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debugf 1"})
 
-	events = append(events, &laneEvent{Level: "INFO", Message: "info 1"})
-	events = append(events, &laneEvent{Level: "INFO", Message: "infof 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "info 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "infof 1"})
 
-	events = append(events, &laneEvent{Level: "WARN", Message: "warn 1"})
-	events = append(events, &laneEvent{Level: "WARN", Message: "warnf 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warn 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warnf 1"})
 
-	events = append(events, &laneEvent{Level: "ERROR", Message: "error 1"})
-	events = append(events, &laneEvent{Level: "ERROR", Message: "errorf 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "error 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "errorf 1"})
 
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatal 1"})
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatalf 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatal 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatalf 1"})
 
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatal 1"})
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatalf 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatal 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatalf 1"})
 
 	if !tl1.VerifyEvents(events) {
 		t.Errorf("Test events don't match")
@@ -323,24 +323,24 @@ func TestTeeTest(t *testing.T) {
 	tl2.PreFatal("fatal", 1)
 	tl2.PreFatalf("%s %d", "fatalf", 1)
 
-	events := []*laneEvent{}
-	events = append(events, &laneEvent{Level: "TRACE", Message: "trace 1"})
-	events = append(events, &laneEvent{Level: "TRACE", Message: "tracef 1"})
+	events := []*LaneEvent{}
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "trace 1"})
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "tracef 1"})
 
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "debug 1"})
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "debugf 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debug 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debugf 1"})
 
-	events = append(events, &laneEvent{Level: "INFO", Message: "info 1"})
-	events = append(events, &laneEvent{Level: "INFO", Message: "infof 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "info 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "infof 1"})
 
-	events = append(events, &laneEvent{Level: "WARN", Message: "warn 1"})
-	events = append(events, &laneEvent{Level: "WARN", Message: "warnf 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warn 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warnf 1"})
 
-	events = append(events, &laneEvent{Level: "ERROR", Message: "error 1"})
-	events = append(events, &laneEvent{Level: "ERROR", Message: "errorf 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "error 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "errorf 1"})
 
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatal 1"})
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatalf 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatal 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatalf 1"})
 
 	if !tl.VerifyEvents(events) {
 		t.Errorf("Test events don't match")
@@ -374,24 +374,24 @@ func TestTeeTestDerive(t *testing.T) {
 	tl5.PreFatal("fatal", 1)
 	tl5.PreFatalf("%s %d", "fatalf", 1)
 
-	events := []*laneEvent{}
-	events = append(events, &laneEvent{Level: "TRACE", Message: "trace 1"})
-	events = append(events, &laneEvent{Level: "TRACE", Message: "tracef 1"})
+	events := []*LaneEvent{}
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "trace 1"})
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "tracef 1"})
 
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "debug 1"})
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "debugf 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debug 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debugf 1"})
 
-	events = append(events, &laneEvent{Level: "INFO", Message: "info 1"})
-	events = append(events, &laneEvent{Level: "INFO", Message: "infof 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "info 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "infof 1"})
 
-	events = append(events, &laneEvent{Level: "WARN", Message: "warn 1"})
-	events = append(events, &laneEvent{Level: "WARN", Message: "warnf 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warn 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warnf 1"})
 
-	events = append(events, &laneEvent{Level: "ERROR", Message: "error 1"})
-	events = append(events, &laneEvent{Level: "ERROR", Message: "errorf 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "error 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "errorf 1"})
 
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatal 1"})
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatalf 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatal 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatalf 1"})
 
 	if !tlv.VerifyEvents(events) {
 		t.Errorf("Test events don't match")
@@ -423,27 +423,27 @@ func TestTeeTestDouble(t *testing.T) {
 	tl.PreFatal("fatal", 1)
 	tl.PreFatalf("%s %d", "fatalf", 1)
 
-	events := []*laneEvent{}
-	events = append(events, &laneEvent{Level: "TRACE", Message: "trace 1"})
-	events = append(events, &laneEvent{Level: "TRACE", Message: "tracef 1"})
+	events := []*LaneEvent{}
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "trace 1"})
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "tracef 1"})
 
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "debug 1"})
-	events = append(events, &laneEvent{Level: "DEBUG", Message: "debugf 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debug 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debugf 1"})
 
-	events = append(events, &laneEvent{Level: "INFO", Message: "info 1"})
-	events = append(events, &laneEvent{Level: "INFO", Message: "infof 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "info 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "infof 1"})
 
-	events = append(events, &laneEvent{Level: "WARN", Message: "warn 1"})
-	events = append(events, &laneEvent{Level: "WARN", Message: "warnf 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warn 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warnf 1"})
 
-	events = append(events, &laneEvent{Level: "ERROR", Message: "error 1"})
-	events = append(events, &laneEvent{Level: "ERROR", Message: "errorf 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "error 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "errorf 1"})
 
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatal 1"})
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatalf 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatal 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatalf 1"})
 
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatal 1"})
-	events = append(events, &laneEvent{Level: "FATAL", Message: "fatalf 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatal 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatalf 1"})
 
 	if !tl1.VerifyEvents(events) {
 		t.Errorf("Test events don't match")
