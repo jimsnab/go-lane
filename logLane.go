@@ -1,6 +1,7 @@
 package lane
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -332,6 +333,32 @@ func (ll *logLane) RemoveTee(l Lane) {
 
 func (wlw *wrappedLogWriter) Write(p []byte) (n int, err error) {
 	text := string(p)
+
+	// The wrapped logger has already written some prefix text, which
+	// is out of our control.
+	//
+	// Make a temporary log to re-create the prefix without any message,
+	// so it be stripped and duplicate prefix is prevented.
+	var prefix bytes.Buffer
+	w := bufio.NewWriter(&prefix)
+	sublog := log.New(w, wlw.ll.wlog.Prefix(), wlw.ll.wlog.Flags())
+	sublog.Print()
+	w.Flush()
+
+	prefixText := strings.TrimSpace(prefix.String())
+	if prefixText != "" {
+		parts := strings.Split(prefixText, " ")
+		cuts := len(parts)
+		for cuts > 0 {
+			cutPoint := strings.Index(text, " ")
+			if cutPoint < 0 {
+				break
+			}
+			text = text[cutPoint+1:]
+			cuts--
+		}
+	}
 	wlw.ll.Info(text)
+
 	return len(p), nil
 }
