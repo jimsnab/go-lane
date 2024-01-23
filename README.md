@@ -58,6 +58,8 @@ Lane interface {
 
 	AddTee(l Lane)
 	RemoveTee(l Lane)
+
+	SetPanicHandler(handler Panic)
 }
 ```
 
@@ -85,9 +87,11 @@ occur during the test.
 * `NewLogLane` log messages go to the standard Go `log` infrastructure. Access the `log`
   instance via `Logger()` to set flags, add a prefix, or change output I/O.
 * `NewDiskLane` like a "log lane" but writes output to a file.
-* `NewTestingLane` captures log messages into a buffer and provides `VerifyEvents()`,
-  `VerifyEventText()` and `EventsToString()` for use in unit test code that checks the log to confirm
-  an expected result.
+* `NewTestingLane` captures log messages into a buffer and provides helpers for unit tests:
+
+	- `VerifyEvents()`, `VerifyEventText()` - check for exact log messages
+	- `FindEvents()`, `FindEventText()` - check logged messages for specific logging events
+	- `EventsToString()` - stringify the logged messages for verification by the unit test
 
   A testing lane also has the API `WantDescendantEvents()` to enable (or disable) capture of
   derived testing lane activity. This is useful to verify a child task reaches an expected
@@ -113,3 +117,15 @@ func example() {
 	l.Error("sample")   // stack trace is logged also
 }
 ```
+
+# Panic Handler
+Fatal messages result in a panic. The panic handler can be replaced by test code to
+verify a fatal condition is reached within a test.
+
+An ordinary unrecovered panic won't allow other go routines to continue, because,
+obviously, the process normally terminates on a panic. A test must ensure all go
+routines started by the test are stopped by its replacement panic handler.
+
+At minimum, the test's replacement panic handler must not let the panicking go
+routine continue execution (it should call `runtime.Goexit()`).
+

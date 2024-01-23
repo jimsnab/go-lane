@@ -33,7 +33,7 @@ func NewDiskLane(ctx context.Context, logFile string) (l Lane, err error) {
 }
 
 func (dl *diskLane) Derive() Lane {
-	ll := deriveLogLane(nil, context.WithValue(dl.Context, parent_lane_id, dl.LaneId()), dl.tees, dl.cr)
+	ll := deriveLogLane(&dl.logLane, context.WithValue(dl.Context, parent_lane_id, dl.LaneId()), dl.tees, dl.cr)
 
 	newFd, err := syscall.Dup(int(dl.f.Fd()))
 	if err != nil {

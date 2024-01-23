@@ -30,6 +30,7 @@ type (
 		tees                 []Lane
 		parent               *testingLane
 		wantDescendantEvents bool
+		onPanic              Panic
 	}
 
 	testingLaneId string
@@ -79,10 +80,15 @@ func deriveTestingLane(ctx context.Context, parent *testingLane, tees []Lane) Te
 		parent:     parent,
 		tees:       tees,
 	}
+	tl.SetPanicHandler(nil)
 
 	// make a logging instance that ultimately does logging via the lane
 	tlw := testingLogWriter{tl: &tl}
 	tl.tlog = log.New(&tlw, "", 0)
+
+	if parent != nil {
+		tl.onPanic = parent.onPanic
+	}
 
 	tl.Context = context.WithValue(ctx, testing_lane_id, uuid.New().String())
 	return &tl
@@ -320,12 +326,12 @@ func (tl *testingLane) PreFatalf(format string, args ...any) {
 
 func (tl *testingLane) Fatal(args ...any) {
 	tl.PreFatal(args...)
-	panic("fatal error") // test must recover
+	tl.onPanic()
 }
 
 func (tl *testingLane) Fatalf(format string, args ...any) {
 	tl.PreFatalf(format, args...)
-	panic("fatal error") // test must recover
+	tl.onPanic()
 }
 
 func (tl *testingLane) logStack(level LaneLogLevel) {
@@ -420,6 +426,16 @@ func (tl *testingLane) RemoveTee(l Lane) {
 		}
 	}
 	tl.mu.Unlock()
+}
+
+func (tl *testingLane) SetPanicHandler(handler Panic) {
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+
+	if handler == nil {
+		handler = func() { panic("fatal error") }
+	}
+	tl.onPanic = handler
 }
 
 func (tlw *testingLogWriter) Write(p []byte) (n int, err error) {

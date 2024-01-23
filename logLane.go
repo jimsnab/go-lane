@@ -27,6 +27,7 @@ type (
 		mu         sync.Mutex
 		tees       []Lane
 		journeyId  string
+		onPanic    Panic
 		// !!! Be sure to update clone() if modifying this struct
 	}
 
@@ -57,6 +58,7 @@ func deriveLogLane(parent *logLane, ctx context.Context, tees []Lane, cr string)
 		tees:       tees,
 		cr:         cr,
 	}
+	ll.SetPanicHandler(nil)
 
 	// make a logging instance that ultimately does logging via the lane
 	wlw := wrappedLogWriter{ll: &ll}
@@ -68,6 +70,7 @@ func deriveLogLane(parent *logLane, ctx context.Context, tees []Lane, cr string)
 		ll.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&parent.level)))
 		ll.wlog.SetFlags(parent.wlog.Flags())
 		ll.wlog.SetPrefix(parent.wlog.Prefix())
+		ll.onPanic = parent.onPanic
 	} else {
 		ll.wlog.SetFlags(log.LstdFlags)
 	}
@@ -89,6 +92,7 @@ func (ll *logLane) clone(ll2 *logLane) {
 	ll2.stackTrace = ll.stackTrace
 	ll2.tees = ll.tees
 	ll2.journeyId = ll.journeyId
+	ll2.onPanic = ll.onPanic
 }
 
 // For cases where \r\n line endings are required (ex: vscode terminal)
@@ -251,12 +255,12 @@ func (ll *logLane) PreFatalf(format string, args ...any) {
 
 func (ll *logLane) Fatal(args ...any) {
 	ll.PreFatal(args...)
-	panic("fatal error")
+	ll.onPanic()
 }
 
 func (ll *logLane) Fatalf(format string, args ...any) {
 	ll.PreFatalf(format, args...)
-	panic("fatal error")
+	ll.onPanic()
 }
 
 func (ll *logLane) logStack(level LaneLogLevel) {
@@ -329,6 +333,16 @@ func (ll *logLane) RemoveTee(l Lane) {
 		}
 	}
 	ll.mu.Unlock()
+}
+
+func (ll *logLane) SetPanicHandler(handler Panic) {
+	ll.mu.Lock()
+	defer ll.mu.Unlock()
+
+	if handler == nil {
+		handler = func() { panic("fatal error") }
+	}
+	ll.onPanic = handler
 }
 
 func (wlw *wrappedLogWriter) Write(p []byte) (n int, err error) {

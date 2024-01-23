@@ -6,7 +6,9 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1947,4 +1949,135 @@ func TestLogLaneDateTimeDefault(t *testing.T) {
 	if !match {
 		t.Errorf("did not find date/time in %s", capture)
 	}
+}
+
+func setTestPanicHandler(l Lane) *sync.WaitGroup {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	l.SetPanicHandler(func() {
+		wg.Done()
+		runtime.Goexit()
+	})
+	return &wg
+}
+
+func TestPanicTestLane(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+	wg := setTestPanicHandler(tl)
+	go func() {
+		tl.Fatal("stop me")
+	}()
+	wg.Wait()
+}
+
+func TestPanicTestLaneF(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+	wg := setTestPanicHandler(tl)
+	go func() {
+		tl.Fatalf("stop me")
+	}()
+	wg.Wait()
+}
+
+func TestPanicTestLaneDerived(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+	wg := setTestPanicHandler(tl)
+	tl2 := tl.Derive()
+	go func() {
+		tl2.Fatal("stop me")
+	}()
+	wg.Wait()
+}
+
+func TestPanicLogLane(t *testing.T) {
+	ll := NewLogLane(context.Background())
+	wg := setTestPanicHandler(ll)
+	go func() {
+		ll.Fatal("stop me")
+	}()
+	wg.Wait()
+}
+
+func TestPanicLogLanef(t *testing.T) {
+	ll := NewLogLane(context.Background())
+	wg := setTestPanicHandler(ll)
+	go func() {
+		ll.Fatalf("stop me")
+	}()
+	wg.Wait()
+}
+
+func TestPanicLogLaneDerived(t *testing.T) {
+	ll := NewLogLane(context.Background())
+	wg := setTestPanicHandler(ll)
+	ll2 := ll.Derive()
+	go func() {
+		ll2.Fatal("stop me")
+	}()
+	wg.Wait()
+}
+
+func TestPanicNullLane(t *testing.T) {
+	nl := NewNullLane(context.Background())
+	wg := setTestPanicHandler(nl)
+	go func() {
+		nl.Fatal("stop me")
+	}()
+	wg.Wait()
+}
+
+func TestPanicNullLanef(t *testing.T) {
+	nl := NewNullLane(context.Background())
+	wg := setTestPanicHandler(nl)
+	go func() {
+		nl.Fatalf("stop me")
+	}()
+	wg.Wait()
+}
+
+func TestPanicNullLaneDerived(t *testing.T) {
+	nl := NewNullLane(context.Background())
+	wg := setTestPanicHandler(nl)
+	nl2 := nl.Derive()
+	go func() {
+		nl2.Fatal("stop me")
+	}()
+	wg.Wait()
+}
+
+func TestPanicDiskLane(t *testing.T) {
+	dl, err := NewDiskLane(context.Background(), "test.log")
+	if err != nil {
+		t.Fatal("make test.log")
+	}
+	wg := setTestPanicHandler(dl)
+	go func() {
+		dl.Fatal("stop me")
+	}()
+	wg.Wait()
+}
+
+func TestPanicDiskLanef(t *testing.T) {
+	dl, err := NewDiskLane(context.Background(), "test.log")
+	if err != nil {
+		t.Fatal("make test.log")
+	}
+	wg := setTestPanicHandler(dl)
+	go func() {
+		dl.Fatalf("stop me")
+	}()
+	wg.Wait()
+}
+
+func TestPanicDiskLaneDerived(t *testing.T) {
+	dl, err := NewDiskLane(context.Background(), "test.log")
+	if err != nil {
+		t.Fatal("make test.log")
+	}
+	wg := setTestPanicHandler(dl)
+	dl2 := dl.Derive()
+	go func() {
+		dl2.Fatal("stop me")
+	}()
+	wg.Wait()
 }
