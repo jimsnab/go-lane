@@ -1966,6 +1966,7 @@ func TestPanicTestLane(t *testing.T) {
 	wg := setTestPanicHandler(tl)
 	go func() {
 		tl.Fatal("stop me")
+		panic("unreachable")
 	}()
 	wg.Wait()
 }
@@ -1975,6 +1976,7 @@ func TestPanicTestLaneF(t *testing.T) {
 	wg := setTestPanicHandler(tl)
 	go func() {
 		tl.Fatalf("stop me")
+		panic("unreachable")
 	}()
 	wg.Wait()
 }
@@ -1985,6 +1987,7 @@ func TestPanicTestLaneDerived(t *testing.T) {
 	tl2 := tl.Derive()
 	go func() {
 		tl2.Fatal("stop me")
+		panic("unreachable")
 	}()
 	wg.Wait()
 }
@@ -1994,6 +1997,7 @@ func TestPanicLogLane(t *testing.T) {
 	wg := setTestPanicHandler(ll)
 	go func() {
 		ll.Fatal("stop me")
+		panic("unreachable")
 	}()
 	wg.Wait()
 }
@@ -2003,6 +2007,7 @@ func TestPanicLogLanef(t *testing.T) {
 	wg := setTestPanicHandler(ll)
 	go func() {
 		ll.Fatalf("stop me")
+		panic("unreachable")
 	}()
 	wg.Wait()
 }
@@ -2013,6 +2018,7 @@ func TestPanicLogLaneDerived(t *testing.T) {
 	ll2 := ll.Derive()
 	go func() {
 		ll2.Fatal("stop me")
+		panic("unreachable")
 	}()
 	wg.Wait()
 }
@@ -2022,6 +2028,7 @@ func TestPanicNullLane(t *testing.T) {
 	wg := setTestPanicHandler(nl)
 	go func() {
 		nl.Fatal("stop me")
+		panic("unreachable")
 	}()
 	wg.Wait()
 }
@@ -2031,6 +2038,7 @@ func TestPanicNullLanef(t *testing.T) {
 	wg := setTestPanicHandler(nl)
 	go func() {
 		nl.Fatalf("stop me")
+		panic("unreachable")
 	}()
 	wg.Wait()
 }
@@ -2041,6 +2049,7 @@ func TestPanicNullLaneDerived(t *testing.T) {
 	nl2 := nl.Derive()
 	go func() {
 		nl2.Fatal("stop me")
+		panic("unreachable")
 	}()
 	wg.Wait()
 }
@@ -2053,6 +2062,7 @@ func TestPanicDiskLane(t *testing.T) {
 	wg := setTestPanicHandler(dl)
 	go func() {
 		dl.Fatal("stop me")
+		panic("unreachable")
 	}()
 	wg.Wait()
 }
@@ -2065,6 +2075,7 @@ func TestPanicDiskLanef(t *testing.T) {
 	wg := setTestPanicHandler(dl)
 	go func() {
 		dl.Fatalf("stop me")
+		panic("unreachable")
 	}()
 	wg.Wait()
 }
@@ -2078,6 +2089,7 @@ func TestPanicDiskLaneDerived(t *testing.T) {
 	dl2 := dl.Derive()
 	go func() {
 		dl2.Fatal("stop me")
+		panic("unreachable")
 	}()
 	wg.Wait()
 }
