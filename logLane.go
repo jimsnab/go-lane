@@ -21,7 +21,6 @@ type (
 		context.Context
 		wlog       *log.Logger // wrapper log to capture caller's logging intent without sending to output
 		writer     *log.Logger // the log instance used for output
-		logFlags   int
 		level      int32
 		cr         string
 		stackTrace []atomic.Bool
@@ -38,6 +37,10 @@ type (
 
 	laneId string
 )
+
+func (*logLane) Metadata(key string, value string) {
+	
+}
 
 const log_lane_id = laneId("log_lane_id")
 const parent_lane_id = laneId("parent_lane_id")
@@ -73,7 +76,7 @@ func deriveLogLane(parent *logLane, ctx context.Context, tees []Lane, cr string)
 		ll.wlog.SetPrefix(parent.wlog.Prefix())
 		ll.onPanic = parent.onPanic
 	} else {
-		ll.wlog.SetFlags(ll.logFlags)
+		ll.wlog.SetFlags(log.LstdFlags)
 	}
 
 	id := uuid.New().String()

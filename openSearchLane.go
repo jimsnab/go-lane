@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/opensearch-project/opensearch-go/v3"
@@ -22,22 +21,22 @@ type LogTemplate struct {
 	JourneyID    string            `json:"journeyId,omitempty"`
 	LaneID       string            `json:"laneId"`
 	LogMessage   string            `json:"logMessage"`
-	Metadata     map[string]string //TODO
+	Metadata     map[string]string `json:"metadata,omitempty"`
 }
 
 type openSearchLane struct {
 	logLane
 	openSearchConnection *openSearchConnection
 	wg                   sync.WaitGroup
+	metadata             map[string]string
 }
 
 type openSearchConnection struct {
 	client     *opensearchapi.Client
 	mu         sync.Mutex
 	logBuffer  []*LogTemplate
-	metadata   map[string]string
 	refCountCh chan *sync.WaitGroup
-	refCount   int32
+	refCount   int
 	index      string
 	appName    string
 }
@@ -45,21 +44,31 @@ type openSearchConnection struct {
 type OpenSearchLane interface {
 	Lane
 	Connect(openSearchUrl, openSearchPort, openSearchUser, openSearchPass, openSearchIndex, openSearchAppName string) (err error)
-	Metadata(args ...any)
+	SetEmergencyHandler()
 }
 
-func (osl *openSearchLane) Metadata(args ...any) {
-	sprint(args...)
+func (osl *openSearchLane) Metadata(key, value string) {
+	osl.openSearchConnection.mu.Lock()
+	defer osl.openSearchConnection.mu.Unlock()
+
+	if osl.metadata == nil {
+		osl.metadata = make(map[string]string)
+		osl.metadata["date"] = time.Now().String()
+	}
+
+	for key, value := range osl.metadata {
+		osl.metadata[key] = value
+	}
 }
 
-func (osl *openSearchLane) emergencyWrite() {
+func (osl *openSearchLane) SetEmergencyHandler() {
 	if len(osl.openSearchConnection.logBuffer) > 100 {
 		fmt.Println("Write to disk")
 	}
 }
 
 func (osl *openSearchLane) Close() {
-	atomic.AddInt32(&osl.openSearchConnection.refCount, -1)
+	//hmmmm
 	osl.openSearchConnection.refCountCh <- &osl.wg
 	osl.wg.Wait()
 }
@@ -69,16 +78,16 @@ func NewOpenSearchLane(ctx context.Context) (l OpenSearchLane) {
 
 	osl := openSearchLane{
 		openSearchConnection: &openSearchConnection{
-			logBuffer: make([]*LogTemplate, 0),
+			logBuffer:  make([]*LogTemplate, 0),
 			refCountCh: make(chan *sync.WaitGroup),
 		},
 	}
 	osl.wg.Add(1)
-	atomic.AddInt32(&osl.openSearchConnection.refCount, 1)
+	osl.openSearchConnection.refCount++
 
 	ll.clone(&osl.logLane)
 	osl.logLane.writer = log.New(&osl, "", 0)
-	osl.logLane.logFlags = log.Flags() &^ (log.Ldate | log.Ltime)
+	osl.wlog.SetFlags(log.Flags() &^ (log.Ldate | log.Ltime))
 
 	l = &osl
 
@@ -112,7 +121,7 @@ func (osl *openSearchLane) Derive() Lane {
 		openSearchConnection: osl.openSearchConnection,
 	}
 	osl2.wg.Add(1)
-	atomic.AddInt32(&osl.openSearchConnection.refCount, 1)
+	osl.openSearchConnection.refCount++
 
 	ll.clone(&osl2.logLane)
 	osl2.logLane.writer = log.New(&osl2, "", 0)
@@ -127,7 +136,7 @@ func (osl *openSearchLane) DeriveReplaceContext(ctx context.Context) Lane {
 		openSearchConnection: osl.openSearchConnection,
 	}
 	osl2.wg.Add(1)
-	atomic.AddInt32(&osl.openSearchConnection.refCount, 1)
+	osl.openSearchConnection.refCount++
 
 	ll.clone(&osl2.logLane)
 	osl2.logLane.writer = log.New(&osl2, "", 0)
@@ -171,6 +180,7 @@ func (osl *openSearchLane) Write(p []byte) (n int, err error) {
 		JourneyID:    osl.journeyId,
 		LaneID:       osl.LaneId(),
 		LogMessage:   logEntry,
+		Metadata:     osl.metadata,
 	}
 
 	osl.openSearchConnection.logBuffer = append(osl.openSearchConnection.logBuffer, logData)
@@ -205,14 +215,12 @@ func (osl *openSearchLane) flushLogBuffer() {
 		case wg := <-osl.openSearchConnection.refCountCh:
 			osl.openSearchConnection.mu.Lock()
 
-			refCounter := atomic.LoadInt32(&osl.openSearchConnection.refCount)
-			fmt.Println(refCounter)
+			osl.openSearchConnection.refCount--
+			fmt.Println(osl.openSearchConnection.refCount)
 
-			if wg != nil {
-				wg.Done()
-			}
+			wg.Done()
 
-			if refCounter == 0 {
+			if osl.openSearchConnection.refCount == 0 {
 				fmt.Println("hmmm")
 				if len(osl.openSearchConnection.logBuffer) > 0 {
 					err := osl.bulkInsert(osl.openSearchConnection.logBuffer)
