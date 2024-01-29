@@ -47,32 +47,6 @@ type OpenSearchLane interface {
 	SetEmergencyHandler()
 }
 
-func (osl *openSearchLane) Metadata(key, value string) {
-	osl.openSearchConnection.mu.Lock()
-	defer osl.openSearchConnection.mu.Unlock()
-
-	if osl.metadata == nil {
-		osl.metadata = make(map[string]string)
-		osl.metadata["date"] = time.Now().String()
-	}
-
-	for key, value := range osl.metadata {
-		osl.metadata[key] = value
-	}
-}
-
-func (osl *openSearchLane) SetEmergencyHandler() {
-	if len(osl.openSearchConnection.logBuffer) > 100 {
-		fmt.Println("Write to disk")
-	}
-}
-
-func (osl *openSearchLane) Close() {
-	//hmmmm
-	osl.openSearchConnection.refCountCh <- &osl.wg
-	osl.wg.Wait()
-}
-
 func NewOpenSearchLane(ctx context.Context) (l OpenSearchLane) {
 	ll := deriveLogLane(nil, ctx, []Lane{}, "")
 
@@ -84,6 +58,7 @@ func NewOpenSearchLane(ctx context.Context) (l OpenSearchLane) {
 	}
 	osl.wg.Add(1)
 	osl.openSearchConnection.refCount++
+	go osl.refCountRoutine()
 
 	ll.clone(&osl.logLane)
 	osl.logLane.writer = log.New(&osl, "", 0)
@@ -97,7 +72,8 @@ func NewOpenSearchLane(ctx context.Context) (l OpenSearchLane) {
 
 func (osl *openSearchLane) Connect(openSearchUrl, openSearchPort, openSearchUser, openSearchPass, openSearchIndex, openSearchAppName string) (err error) {
 	if osl.openSearchConnection.client != nil {
-		//close method
+		osl.Warn("there is already a connection to OpenSearch")
+		return
 	}
 
 	client, err := newOpenSearchClient(openSearchUrl, openSearchPort, openSearchUser, openSearchPass)
@@ -108,7 +84,7 @@ func (osl *openSearchLane) Connect(openSearchUrl, openSearchPort, openSearchUser
 	osl.openSearchConnection.client = client
 	osl.openSearchConnection.index = openSearchIndex
 	osl.openSearchConnection.appName = openSearchAppName
-	go osl.flushLogBuffer()
+	go osl.openSearchConnection.processConnection(osl)
 
 	return
 
@@ -144,21 +120,53 @@ func (osl *openSearchLane) DeriveReplaceContext(ctx context.Context) Lane {
 	return &osl2
 }
 
-func newOpenSearchClient(openSearchUrl, openSearchPort, openSearchUser, openSearchPass string) (client *opensearchapi.Client, err error) {
-	client, err = opensearchapi.NewClient(
-		opensearchapi.Config{
-			Client: opensearch.Config{
-				Transport: &http.Transport{
-					TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-				},
-				Addresses: []string{fmt.Sprintf("%s:%s", openSearchUrl, openSearchPort)},
-				Username:  openSearchUser,
-				Password:  openSearchPass,
-			},
-		},
-	)
+func (osl *openSearchLane) Metadata(key, value string) {
+	osl.openSearchConnection.mu.Lock()
+	defer osl.openSearchConnection.mu.Unlock()
 
-	return
+	if osl.metadata == nil {
+		osl.metadata = make(map[string]string)
+		osl.metadata["timestamp"] = time.Now().String()
+	}
+
+	osl.metadata[key] = value
+
+}
+
+func (osl *openSearchLane) SetEmergencyHandler() {
+	//TODO
+	if len(osl.openSearchConnection.logBuffer) > 100 {
+		fmt.Println("Write to disk")
+	}
+}
+
+func (osl *openSearchLane) Close() {
+	osl.openSearchConnection.refCountCh <- &osl.wg
+	osl.wg.Wait()
+}
+
+func (osl *openSearchLane) refCountRoutine() {
+	for {
+		select {
+		case wg := <-osl.openSearchConnection.refCountCh:
+			osl.openSearchConnection.mu.Lock()
+
+			osl.openSearchConnection.refCount--
+
+			wg.Done()
+
+			if osl.openSearchConnection.refCount == 0 {
+				fmt.Println("hmmmmm")
+				err := osl.openSearchConnection.flush(osl, osl.openSearchConnection.logBuffer)
+				if err != nil {
+					fmt.Print("error inserting logs in openSearch on lane termination")
+				}
+				return
+			}
+
+			osl.openSearchConnection.mu.Unlock()
+		}
+	}
 }
 
 func (osl *openSearchLane) Write(p []byte) (n int, err error) {
@@ -188,7 +196,8 @@ func (osl *openSearchLane) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func (osl *openSearchLane) flushLogBuffer() {
+func (osc *openSearchConnection) processConnection(l Lane) {
+	var lb []*LogTemplate
 	backoffDuration := 10 * time.Second
 	ticker := time.NewTicker(backoffDuration)
 	defer ticker.Stop()
@@ -196,59 +205,53 @@ func (osl *openSearchLane) flushLogBuffer() {
 	for {
 		select {
 		case <-ticker.C:
-			osl.openSearchConnection.mu.Lock()
-			if len(osl.openSearchConnection.logBuffer) > 0 {
-				err := osl.bulkInsert(osl.openSearchConnection.logBuffer)
-				if err != nil {
-					backoffDuration *= 2
-					if backoffDuration > 10*time.Minute {
-						backoffDuration = 10 * time.Minute
-					}
-					ticker.Reset(backoffDuration)
-				} else {
-					backoffDuration = 10 * time.Second
-					osl.openSearchConnection.logBuffer = osl.openSearchConnection.logBuffer[:0]
-					ticker.Reset(backoffDuration)
-				}
+			
+			osc.mu.Lock()
+			lb = append(lb, osc.logBuffer...)
+			osc.logBuffer = osc.logBuffer[:0]
+			osc.mu.Unlock()
+
+			if len(lb) > 1000 {
+				fmt.Println("TODO insert data in disk")
 			}
-			osl.openSearchConnection.mu.Unlock()
-		case wg := <-osl.openSearchConnection.refCountCh:
-			osl.openSearchConnection.mu.Lock()
-
-			osl.openSearchConnection.refCount--
-			fmt.Println(osl.openSearchConnection.refCount)
-
-			wg.Done()
-
-			if osl.openSearchConnection.refCount == 0 {
-				fmt.Println("hmmm")
-				if len(osl.openSearchConnection.logBuffer) > 0 {
-					err := osl.bulkInsert(osl.openSearchConnection.logBuffer)
-					if err != nil {
-						fmt.Print("Error inserting logs in opensearch on channel closing")
-					}
+			
+			err := osc.flush(l, lb)
+			if err != nil {
+				backoffDuration *= 2
+				if backoffDuration > 10*time.Minute {
+					backoffDuration = 10 * time.Minute
 				}
-				osl.openSearchConnection.mu.Unlock()
-				return
+				ticker.Reset(backoffDuration)
+			} else {
+				backoffDuration = 10 * time.Second
+				ticker.Reset(backoffDuration)
+				lb = lb[:0]
 			}
-
-			osl.openSearchConnection.mu.Unlock()
+		
 		}
-
 	}
-
 }
 
-func (osl *openSearchLane) bulkInsert(logDataSlice []*LogTemplate) (err error) {
+func (osc *openSearchConnection) flush(l Lane, logBuffer []*LogTemplate) (err error) {
+	if len(logBuffer) > 0 {
+		err = osc.bulkInsert(l, logBuffer)
+		if err != nil {
+			return
+		}
+	}
+	return
+}
 
-	jsonData, err := osl.generateBulkJson(logDataSlice)
+func (osc *openSearchConnection) bulkInsert(l Lane, logBuffer []*LogTemplate) (err error) {
+
+	jsonData, err := osc.generateBulkJson(logBuffer)
 	if err != nil {
 		return
 	}
 
-	resp, err := osl.openSearchConnection.client.Bulk(osl, opensearchapi.BulkReq{Body: strings.NewReader(jsonData)})
+	resp, err := osc.client.Bulk(l, opensearchapi.BulkReq{Body: strings.NewReader(jsonData)})
 	if err != nil {
-		fmt.Println("Error in storing values in opensearch:", err)
+		fmt.Println("Error while storing values in opensearch:", err)
 		return
 	}
 
@@ -257,13 +260,13 @@ func (osl *openSearchLane) bulkInsert(logDataSlice []*LogTemplate) (err error) {
 	return
 }
 
-func (osl *openSearchLane) generateBulkJson(logDataSlice []*LogTemplate) (jsonData string, err error) {
+func (osc *openSearchConnection) generateBulkJson(logBuffer []*LogTemplate) (jsonData string, err error) {
 	var lines []string
 	var createLine []byte
 	var logDataLine []byte
 
-	for _, logData := range logDataSlice {
-		createAction := map[string]interface{}{"create": map[string]interface{}{"_index": osl.openSearchConnection.index}}
+	for _, logData := range logBuffer {
+		createAction := map[string]interface{}{"create": map[string]interface{}{"_index": osc.index}}
 		createLine, err = json.Marshal(createAction)
 		if err != nil {
 			fmt.Println("Error marshalling createAction JSON:", err)
@@ -280,6 +283,23 @@ func (osl *openSearchLane) generateBulkJson(logDataSlice []*LogTemplate) (jsonDa
 	}
 
 	jsonData = strings.Join(lines, "\n") + "\n"
+
+	return
+}
+
+func newOpenSearchClient(openSearchUrl, openSearchPort, openSearchUser, openSearchPass string) (client *opensearchapi.Client, err error) {
+	client, err = opensearchapi.NewClient(
+		opensearchapi.Config{
+			Client: opensearch.Config{
+				Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				},
+				Addresses: []string{fmt.Sprintf("%s:%s", openSearchUrl, openSearchPort)},
+				Username:  openSearchUser,
+				Password:  openSearchPass,
+			},
+		},
+	)
 
 	return
 }
