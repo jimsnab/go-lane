@@ -152,8 +152,6 @@ func (osl *openSearchLane) refCountRoutine() {
 
 		osl.openSearchConnection.refCount--
 
-		fmt.Println(osl.openSearchConnection.refCount)
-
 		wg.Done()
 
 		if osl.openSearchConnection.refCount == 0 {
@@ -199,8 +197,6 @@ func (osl *openSearchLane) Write(p []byte) (n int, err error) {
 	}
 
 	osl.openSearchConnection.logBuffer = append(osl.openSearchConnection.logBuffer, logData)
-
-	fmt.Println(osl.openSearchConnection.logBuffer)
 
 	return len(p), nil
 }
@@ -258,6 +254,7 @@ func (osc *openSearchConnection) bulkInsert(l Lane) (err error) {
 		return
 	}
 
+	//TODO remove this line
 	fmt.Println(resp)
 
 	return
