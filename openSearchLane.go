@@ -53,7 +53,7 @@ func NewOpenSearchLane(ctx context.Context) (l OpenSearchLane) {
 	osl := openSearchLane{
 		openSearchConnection: &openSearchConnection{
 			logBuffer:  make([]*LogTemplate, 0),
-			refCountCh: make(chan *sync.WaitGroup),
+			refCountCh: make(chan *sync.WaitGroup, 1),
 		},
 	}
 	osl.wg.Add(1)
@@ -126,7 +126,7 @@ func (osl *openSearchLane) Metadata(key, value string) {
 
 	if osl.metadata == nil {
 		osl.metadata = make(map[string]string)
-		osl.metadata["timestamp"] = time.Now().String()
+		osl.metadata["timestamp"] = time.Now().UTC().String()
 	}
 
 	osl.metadata[key] = value
@@ -134,7 +134,7 @@ func (osl *openSearchLane) Metadata(key, value string) {
 }
 
 func (osl *openSearchLane) SetEmergencyHandler() {
-	//TODO
+	//TODO implementation
 	if len(osl.openSearchConnection.logBuffer) > 100 {
 		fmt.Println("Write to disk")
 	}
@@ -146,26 +146,29 @@ func (osl *openSearchLane) Close() {
 }
 
 func (osl *openSearchLane) refCountRoutine() {
-	for {
-		select {
-		case wg := <-osl.openSearchConnection.refCountCh:
-			osl.openSearchConnection.mu.Lock()
 
-			osl.openSearchConnection.refCount--
+	for wg := range osl.openSearchConnection.refCountCh {
+		osl.openSearchConnection.mu.Lock()
 
-			wg.Done()
+		osl.openSearchConnection.refCount--
 
-			if osl.openSearchConnection.refCount == 0 {
-				fmt.Println("hmmmmm")
-				err := osl.openSearchConnection.flush(osl, osl.openSearchConnection.logBuffer)
+		fmt.Println(osl.openSearchConnection.refCount)
+
+		wg.Done()
+
+		if osl.openSearchConnection.refCount == 0 {
+			fmt.Println("ref count is 0, terminating lane")
+			if len(osl.openSearchConnection.logBuffer) > 0 {
+				err := osl.openSearchConnection.flush(osl)
 				if err != nil {
-					fmt.Print("error inserting logs in openSearch on lane termination")
+					//TODO insert logs on disk
+					fmt.Print("error inserting logs in OpenSearch on lane termination")
 				}
-				return
+				osl.openSearchConnection.logBuffer = osl.openSearchConnection.logBuffer[:0]
 			}
-
-			osl.openSearchConnection.mu.Unlock()
 		}
+
+		osl.openSearchConnection.mu.Unlock()
 	}
 }
 
@@ -174,6 +177,10 @@ func (osl *openSearchLane) Write(p []byte) (n int, err error) {
 	defer osl.openSearchConnection.mu.Unlock()
 
 	logEntry := string(p)
+
+	if len(logEntry) >= 2 {
+		logEntry = logEntry[:len(logEntry)-2]
+	}
 
 	fmt.Println(logEntry)
 
@@ -193,29 +200,24 @@ func (osl *openSearchLane) Write(p []byte) (n int, err error) {
 
 	osl.openSearchConnection.logBuffer = append(osl.openSearchConnection.logBuffer, logData)
 
+	fmt.Println(osl.openSearchConnection.logBuffer)
+
 	return len(p), nil
 }
 
 func (osc *openSearchConnection) processConnection(l Lane) {
-	var lb []*LogTemplate
 	backoffDuration := 10 * time.Second
 	ticker := time.NewTicker(backoffDuration)
 	defer ticker.Stop()
 
-	for {
-		select {
-		case <-ticker.C:
-			
-			osc.mu.Lock()
-			lb = append(lb, osc.logBuffer...)
-			osc.logBuffer = osc.logBuffer[:0]
-			osc.mu.Unlock()
-
-			if len(lb) > 1000 {
+	for range ticker.C {
+		osc.mu.Lock()
+		if len(osc.logBuffer) > 0 {
+			if len(osc.logBuffer) > 1000 {
+				//TODO implementation
 				fmt.Println("TODO insert data in disk")
 			}
-			
-			err := osc.flush(l, lb)
+			err := osc.flush(l)
 			if err != nil {
 				backoffDuration *= 2
 				if backoffDuration > 10*time.Minute {
@@ -224,17 +226,18 @@ func (osc *openSearchConnection) processConnection(l Lane) {
 				ticker.Reset(backoffDuration)
 			} else {
 				backoffDuration = 10 * time.Second
+				osc.logBuffer = osc.logBuffer[:0]
 				ticker.Reset(backoffDuration)
-				lb = lb[:0]
 			}
-		
 		}
+		osc.mu.Unlock()
 	}
 }
 
-func (osc *openSearchConnection) flush(l Lane, logBuffer []*LogTemplate) (err error) {
-	if len(logBuffer) > 0 {
-		err = osc.bulkInsert(l, logBuffer)
+
+func (osc *openSearchConnection) flush(l Lane) (err error) {
+	if len(osc.logBuffer) > 0 {
+		err = osc.bulkInsert(l)
 		if err != nil {
 			return
 		}
@@ -242,9 +245,9 @@ func (osc *openSearchConnection) flush(l Lane, logBuffer []*LogTemplate) (err er
 	return
 }
 
-func (osc *openSearchConnection) bulkInsert(l Lane, logBuffer []*LogTemplate) (err error) {
+func (osc *openSearchConnection) bulkInsert(l Lane) (err error) {
 
-	jsonData, err := osc.generateBulkJson(logBuffer)
+	jsonData, err := osc.generateBulkJson()
 	if err != nil {
 		return
 	}
@@ -260,12 +263,12 @@ func (osc *openSearchConnection) bulkInsert(l Lane, logBuffer []*LogTemplate) (e
 	return
 }
 
-func (osc *openSearchConnection) generateBulkJson(logBuffer []*LogTemplate) (jsonData string, err error) {
+func (osc *openSearchConnection) generateBulkJson() (jsonData string, err error) {
 	var lines []string
 	var createLine []byte
 	var logDataLine []byte
 
-	for _, logData := range logBuffer {
+	for _, logData := range osc.logBuffer {
 		createAction := map[string]interface{}{"create": map[string]interface{}{"_index": osc.index}}
 		createLine, err = json.Marshal(createAction)
 		if err != nil {
