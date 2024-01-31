@@ -18,6 +18,10 @@ const (
 type (
 	LaneLogLevel int
 
+	LaneMetadata interface {
+		SetMetadata(key, val string)
+	}
+
 	Lane interface {
 		context.Context
 
@@ -102,8 +106,6 @@ type (
 		// an injected fatal error. Use this with care, and be sure to call runtime.Goexit() so that
 		// the test version of Panic doesn't return.
 		SetPanicHandler(handler Panic)
-
-		Metadata(key, value string)
 	}
 
 	Panic func()

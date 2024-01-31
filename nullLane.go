@@ -176,6 +176,3 @@ func (nl *nullLane) SetPanicHandler(handler Panic) {
 func (wnw *wrappedNullWriter) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
-
-func (nl *nullLane) Metadata(key, value string){
-}

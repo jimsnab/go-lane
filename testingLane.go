@@ -443,6 +443,3 @@ func (tlw *testingLogWriter) Write(p []byte) (n int, err error) {
 	tlw.tl.Info(text)
 	return len(p), nil
 }
-
-func (tl *testingLane) Metadata(key, value string){
-}

@@ -38,10 +38,6 @@ type (
 	laneId string
 )
 
-func (*logLane) Metadata(key string, value string) {
-	
-}
-
 const log_lane_id = laneId("log_lane_id")
 const parent_lane_id = laneId("parent_lane_id")
 
