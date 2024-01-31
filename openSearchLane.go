@@ -99,6 +99,7 @@ func NewOpenSearchLane(ctx context.Context) (l OpenSearchLane) {
 	}
 	osl.openSearchConnection.attach()
 
+	ll.setFlagsMask(log.Ldate | log.Ltime)
 	ll.clone(&osl.logLane)
 	osl.logLane.writer = log.New(&osl, "", 0)
 
@@ -170,6 +171,7 @@ func finishDerive(osl *openSearchLane, ll *logLane) *openSearchLane {
 	}
 	osl.openSearchConnection.attach()
 
+	ll.setFlagsMask(log.Ldate | log.Ltime)
 	ll.clone(&osl2.logLane)
 	osl2.logLane.writer = log.New(&osl2, "", 0)
 

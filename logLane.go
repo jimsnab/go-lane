@@ -28,6 +28,7 @@ type (
 		tees       []Lane
 		journeyId  string
 		onPanic    Panic
+		logMask    int
 		// !!! Be sure to update clone() if modifying this struct
 	}
 
@@ -93,6 +94,7 @@ func (ll *logLane) clone(ll2 *logLane) {
 	ll2.tees = ll.tees
 	ll2.journeyId = ll.journeyId
 	ll2.onPanic = ll.onPanic
+	ll2.logMask = ll.logMask
 }
 
 // For cases where \r\n line endings are required (ex: vscode terminal)
@@ -141,7 +143,7 @@ func (ll *logLane) shouldLog(level LaneLogLevel) bool {
 		// made to prefix and flags are copied into the instance
 		// generating the output
 		ll.writer.SetPrefix(ll.wlog.Prefix())
-		ll.writer.SetFlags(ll.wlog.Flags())
+		ll.writer.SetFlags(ll.wlog.Flags() &^ ll.logMask)
 		return true
 	}
 
@@ -343,6 +345,10 @@ func (ll *logLane) SetPanicHandler(handler Panic) {
 		handler = func() { panic("fatal error") }
 	}
 	ll.onPanic = handler
+}
+
+func (ll *logLane) setFlagsMask(mask int) {
+	ll.logMask = mask
 }
 
 func (wlw *wrappedLogWriter) Write(p []byte) (n int, err error) {
