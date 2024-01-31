@@ -15,11 +15,12 @@ import (
 	"github.com/opensearch-project/opensearch-go/v3/opensearchapi"
 )
 
+// TODO change default values
 const (
-	DefaultLogThreshold    = 5
-	DefaultMaxBufferSize   = 10
-	DefaultBackoffInterval = 10 * time.Second
-	DefaultBackOffLimit    = 10 * time.Minute
+	OslDefaultLogThreshold    = 5
+	OslDefaultMaxBufferSize   = 10
+	OslDefaultBackoffInterval = 10 * time.Second
+	OslDefaultBackOffLimit    = 10 * time.Minute
 )
 
 type OpenSearchLogMessage struct {
@@ -31,9 +32,15 @@ type OpenSearchLogMessage struct {
 	Metadata     map[string]string `json:"metadata,omitempty"`
 }
 
-type EmergencyFn func(logBuffer []*OpenSearchLogMessage)
+type OslEmergencyFn func(logBuffer []*OpenSearchLogMessage) (err error)
 
-type OpenSearchLaneConfig struct {
+type OslStats struct {
+	MessagesQueued     int `json:"messagesQueued"`
+	MessagesSent       int `json:"messagesSent"`
+	MessagesSentFailed int `json:"messagesSentFailed"`
+}
+
+type OslConfig struct {
 	OpenSearchUrl     string        `json:"openSearchUrl"`
 	OpenSearchPort    string        `json:"openSearchPort"`
 	OpenSearchUser    string        `json:"openSearchUser"`
@@ -53,26 +60,27 @@ type openSearchLane struct {
 }
 
 type openSearchConnection struct {
-	client         *opensearchapi.Client
-	mu             sync.Mutex
-	logBuffer      []*OpenSearchLogMessage
-	stopCh         chan *sync.WaitGroup
-	wakeCh         chan struct{}
-	refCount       int
-	config         OpenSearchLaneConfig
-	emergencyFn    EmergencyFn
-	ctx            context.Context
-	cancelFn       context.CancelFunc
-	messagesQueued int
-	messagesSent   int
+	client             *opensearchapi.Client
+	mu                 sync.Mutex
+	logBuffer          []*OpenSearchLogMessage
+	stopCh             chan *sync.WaitGroup
+	wakeCh             chan struct{}
+	refCount           int
+	config             OslConfig
+	emergencyFn        OslEmergencyFn
+	ctx                context.Context
+	cancelFn           context.CancelFunc
+	messagesQueued     int
+	messagesSent       int
+	messagesSentFailed int
 }
 
 type OpenSearchLane interface {
 	Lane
 	LaneMetadata
-	Connect(config OpenSearchLaneConfig) (err error)
-	SetEmergencyHandler(emergencyFn EmergencyFn)
-	Stats()
+	Connect(config OslConfig) (err error)
+	SetEmergencyHandler(emergencyFn OslEmergencyFn)
+	Stats() (stats OslStats)
 }
 
 func NewOpenSearchLane(ctx context.Context) (l OpenSearchLane) {
@@ -93,7 +101,6 @@ func NewOpenSearchLane(ctx context.Context) (l OpenSearchLane) {
 
 	ll.clone(&osl.logLane)
 	osl.logLane.writer = log.New(&osl, "", 0)
-	osl.wlog.SetFlags(log.Flags() &^ (log.Ldate | log.Ltime))
 
 	l = &osl
 
@@ -101,10 +108,9 @@ func NewOpenSearchLane(ctx context.Context) (l OpenSearchLane) {
 
 }
 
-func (osl *openSearchLane) Connect(config OpenSearchLaneConfig) (err error) {
+func (osl *openSearchLane) Connect(config OslConfig) (err error) {
 	if osl.openSearchConnection.client != nil {
-		osl.Warn("there is already a connection to OpenSearch")
-		return
+		osl.openSearchConnection.wakeCh <- struct{}{}
 	}
 
 	client, err := newOpenSearchClient(config.OpenSearchUrl, config.OpenSearchPort, config.OpenSearchUser, config.OpenSearchPass)
@@ -115,16 +121,16 @@ func (osl *openSearchLane) Connect(config OpenSearchLaneConfig) (err error) {
 	osl.openSearchConnection.config = config
 
 	if config.LogThreshold == 0 {
-		osl.openSearchConnection.config.LogThreshold = DefaultLogThreshold
+		osl.openSearchConnection.config.LogThreshold = OslDefaultLogThreshold
 	}
 	if config.MaxBufferSize == 0 {
-		osl.openSearchConnection.config.MaxBufferSize = DefaultMaxBufferSize
+		osl.openSearchConnection.config.MaxBufferSize = OslDefaultMaxBufferSize
 	}
 	if config.BackoffInterval == 0 {
-		osl.openSearchConnection.config.BackoffInterval = DefaultBackoffInterval
+		osl.openSearchConnection.config.BackoffInterval = OslDefaultBackoffInterval
 	}
 	if config.BackOffLimit == 0 {
-		osl.openSearchConnection.config.BackOffLimit = DefaultBackOffLimit
+		osl.openSearchConnection.config.BackOffLimit = OslDefaultBackOffLimit
 	}
 
 	go osl.openSearchConnection.processConnection(osl)
@@ -136,35 +142,29 @@ func (osl *openSearchLane) Connect(config OpenSearchLaneConfig) (err error) {
 func (osl *openSearchLane) Derive() Lane {
 	ll := deriveLogLane(&osl.logLane, context.WithValue(osl.Context, parent_lane_id, osl.LaneId()), osl.tees, osl.cr)
 
-	osl2 := openSearchLane{
-		openSearchConnection: osl.openSearchConnection,
-	}
-	osl.openSearchConnection.attach()
+	osl2 := finishDerive(osl, ll)
 
-	ll.clone(&osl2.logLane)
-	osl2.logLane.writer = log.New(&osl2, "", 0)
-
-	return &osl2
+	return osl2
 }
 
 func (osl *openSearchLane) DeriveWithCancel() (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithCancel(context.WithValue(osl.logLane.Context, parent_lane_id, osl.logLane.LaneId()))
 	ll := deriveLogLane(&osl.logLane, childCtx, osl.tees, osl.cr)
 
-	osl2 := openSearchLane{
-		openSearchConnection: osl.openSearchConnection,
-	}
-	osl.openSearchConnection.attach()
+	osl2 := finishDerive(osl, ll)
 
-	ll.clone(&osl2.logLane)
-	osl2.logLane.writer = log.New(&osl2, "", 0)
-
-	return &osl2, cancelFn
+	return osl2, cancelFn
 }
 
 func (osl *openSearchLane) DeriveReplaceContext(ctx context.Context) Lane {
 	ll := deriveLogLane(&osl.logLane, context.WithValue(ctx, parent_lane_id, osl.LaneId()), osl.tees, osl.cr)
 
+	osl2 := finishDerive(osl, ll)
+
+	return osl2
+}
+
+func finishDerive(osl *openSearchLane, ll *logLane) *openSearchLane {
 	osl2 := openSearchLane{
 		openSearchConnection: osl.openSearchConnection,
 	}
@@ -182,7 +182,6 @@ func (osl *openSearchLane) SetMetadata(key string, val string) {
 
 	if osl.metadata == nil {
 		osl.metadata = make(map[string]string)
-		osl.metadata["timestamp"] = time.Now().UTC().Format(time.RFC3339)
 	}
 
 	osl.metadata[key] = val
@@ -205,9 +204,10 @@ func (osl *openSearchLane) Write(p []byte) (n int, err error) {
 	// TODO remove this line
 	fmt.Println(logEntry)
 
-	parentLaneId, ok := osl.Context.Value(parent_lane_id).(string)
-	if !ok {
-		parentLaneId = ""
+	parentLaneId, _ := osl.Context.Value(parent_lane_id).(string)
+
+	if osl.metadata != nil {
+		osl.metadata["timestamp"] = time.Now().UTC().Format(time.RFC3339)
 	}
 
 	logData := &OpenSearchLogMessage{
@@ -223,29 +223,27 @@ func (osl *openSearchLane) Write(p []byte) (n int, err error) {
 
 	osl.openSearchConnection.messagesQueued++
 
-	if len(osl.openSearchConnection.logBuffer)%osl.openSearchConnection.config.LogThreshold == 0 {
+	if ((1 + osl.openSearchConnection.messagesSent - osl.openSearchConnection.messagesQueued) % osl.openSearchConnection.config.LogThreshold) == 0 {
 		osl.openSearchConnection.wakeCh <- struct{}{}
 	}
 
 	return len(p), nil
 }
 
-func (osl *openSearchLane) Stats() {
+func (osl *openSearchLane) Stats() (stats OslStats) {
 	osl.openSearchConnection.mu.Lock()
 	defer osl.openSearchConnection.mu.Unlock()
 
-	logData := &OpenSearchLogMessage{
-		AppName:  "OpenSearchLane",
-		Metadata: make(map[string]string),
-	}
-	logData.Metadata["timestamp"] = time.Now().UTC().Format(time.RFC3339)
-	logData.Metadata["messagesSent"] = fmt.Sprint(osl.openSearchConnection.messagesSent)
-	logData.Metadata["messagesQueued"] = fmt.Sprint(osl.openSearchConnection.messagesQueued)
+	stats.MessagesQueued = osl.openSearchConnection.messagesQueued
+	stats.MessagesSent = osl.openSearchConnection.messagesSent
+	stats.MessagesSentFailed = osl.openSearchConnection.messagesSentFailed
 
-	osl.openSearchConnection.logBuffer = append(osl.openSearchConnection.logBuffer, logData)
+	return
 }
 
-func (osl *openSearchLane) SetEmergencyHandler(emergencyFn EmergencyFn) {
+func (osl *openSearchLane) SetEmergencyHandler(emergencyFn OslEmergencyFn) {
+	osl.openSearchConnection.mu.Lock()
+	defer osl.openSearchConnection.mu.Unlock()
 	osl.openSearchConnection.emergencyFn = emergencyFn
 }
 
@@ -268,7 +266,12 @@ func (osc *openSearchConnection) processConnection(l Lane) {
 						err := osc.flush(osc.logBuffer)
 						if err != nil {
 							if osc.emergencyFn != nil {
-								osc.emergencyFn(osc.logBuffer)
+								err = osc.emergencyFn(osc.logBuffer)
+								if err != nil {
+									osc.messagesSentFailed += len(osc.logBuffer)
+								} else {
+									osc.messagesSent += len(osc.logBuffer)
+								}
 							}
 						}
 						osc.logBuffer = make([]*OpenSearchLogMessage, 0)
@@ -299,7 +302,12 @@ func (osc *openSearchConnection) send(backoffDuration time.Duration) time.Durati
 		err := osc.flush(logBuffer)
 		if err != nil {
 			if len(logBuffer) > osc.config.MaxBufferSize {
-				osc.emergencyFn(logBuffer)
+				err = osc.emergencyFn(logBuffer)
+				if err != nil {
+					osc.messagesSentFailed += len(logBuffer)
+				} else {
+					osc.messagesSent += len(logBuffer)
+				}
 				backoffDuration = osc.config.BackoffInterval
 			} else {
 				backoffDuration *= 2
@@ -371,13 +379,13 @@ func (osc *openSearchConnection) generateBulkJson(logBuffer []*OpenSearchLogMess
 		createAction := map[string]interface{}{"create": map[string]interface{}{"_index": osc.config.OpenSearchIndex}}
 		createLine, err = json.Marshal(createAction)
 		if err != nil {
-			fmt.Println("Error marshalling createAction JSON:", err)
+			osc.emergencyLog("Error marshalling createAction JSON: %v", err)
 			return
 		}
 
 		logDataLine, err = json.Marshal(logData)
 		if err != nil {
-			fmt.Println("Error marshalling logData JSON:", err)
+			osc.emergencyLog("Error marshalling logData JSON: %v", err)
 			return
 		}
 
@@ -403,7 +411,12 @@ func (osc *openSearchConnection) emergencyLog(formatStr string, args ...any) {
 	logBuffer := []*OpenSearchLogMessage{oslm}
 
 	if osc.emergencyFn != nil {
-		osc.emergencyFn(logBuffer)
+		err := osc.emergencyFn(logBuffer)
+		if err != nil {
+			osc.messagesSentFailed += len(logBuffer)
+		} else {
+			osc.messagesSent += len(logBuffer)
+		}
 	}
 }
 

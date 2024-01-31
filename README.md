@@ -102,7 +102,7 @@ occur during the test.
 - `NewNullLane` creates a lane that does not log but still has the context functionality.
   Logging is similar to `log.SetOutput(io.Discard)` - fatal errors still terminate the app.
 
-- `openSearchLane` is a type that implements the Lane interface for logging to OpenSearch. It contains methods for writing logs, flushing log buffers, and closing the lane.
+- `OpenSearchLane` is a type that implements the Lane interface for logging to OpenSearch. It contains methods for writing logs, flushing log buffers, and closing the lane.
 
 Normally the production code uses a log lane, and unit tests use a testing lane; a null
 lane is handy in unit tests to disable logging out of scope of the test.
