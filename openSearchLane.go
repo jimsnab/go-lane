@@ -31,7 +31,7 @@ type OpenSearchLogMessage struct {
 	Metadata     map[string]string `json:"metadata,omitempty"`
 }
 
-type EmergencyFn func(logBuffer any)
+type EmergencyFn func(logBuffer []*OpenSearchLogMessage)
 
 type OpenSearchLaneConfig struct {
 	OpenSearchUrl     string        `json:"openSearchUrl"`
