@@ -67,6 +67,7 @@ type openSearchConnection struct {
 	logBuffer          []*OslMessage
 	stopCh             chan *sync.WaitGroup
 	wakeCh             chan bool
+	clientCh           chan *sync.WaitGroup
 	refCount           int
 	config             *OslConfig
 	emergencyFn        OslEmergencyFn
@@ -80,7 +81,7 @@ type openSearchConnection struct {
 type OpenSearchLane interface {
 	Lane
 	LaneMetadata
-	ReConnect(config *OslConfig) (err error)
+	Reconnect(config *OslConfig) (err error)
 	SetEmergencyHandler(emergencyFn OslEmergencyFn)
 	Stats() (stats OslStats)
 }
@@ -95,6 +96,7 @@ func NewOpenSearchLane(ctx context.Context, config *OslConfig) (l OpenSearchLane
 			logBuffer: make([]*OslMessage, 0),
 			stopCh:    make(chan *sync.WaitGroup, 1),
 			wakeCh:    make(chan bool, 1),
+			clientCh:  make(chan *sync.WaitGroup, 1),
 			ctx:       ctx,
 			cancelFn:  cancelFn,
 		},
@@ -129,8 +131,10 @@ func (osl *openSearchLane) connect(config *OslConfig) (err error) {
 	var client *opensearchapi.Client
 
 	if !config.offline && osl.openSearchConnection.client != nil && osl.openSearchConnection.client.Client != nil {
-		osl.openSearchConnection.wakeCh <- true
-		osl.openSearchConnection.client = nil
+		var wg sync.WaitGroup
+		wg.Add(1)
+		osl.openSearchConnection.clientCh <- &wg
+		wg.Wait()
 	}
 
 	if !config.offline {
@@ -159,7 +163,7 @@ func (osl *openSearchLane) connect(config *OslConfig) (err error) {
 
 }
 
-func (osl *openSearchLane) ReConnect(config *OslConfig) (err error) {
+func (osl *openSearchLane) Reconnect(config *OslConfig) (err error) {
 	return osl.connect(config)
 }
 
@@ -220,19 +224,23 @@ func (osl *openSearchLane) Write(p []byte) (n int, err error) {
 	osl.openSearchConnection.mu.Lock()
 	defer osl.openSearchConnection.mu.Unlock()
 
+	var mapCopy map[string]string
+
 	logEntry := string(p)
 
-	if strings.Contains(logEntry, "\n") {
-		logEntry = strings.ReplaceAll(logEntry, "\n", "")
-	}
+	logEntry = strings.ReplaceAll(logEntry, "\n", " ")
 
 	// TODO remove this line
 	fmt.Println(logEntry)
 
 	parentLaneId, _ := osl.Context.Value(parent_lane_id).(string)
 
-	if osl.metadata != nil {
-		osl.metadata["timestamp"] = time.Now().UTC().Format(time.RFC3339)
+	if len(osl.metadata) > 0 {
+		mapCopy = make(map[string]string, len(osl.metadata))
+		for k, v := range osl.metadata {
+			mapCopy[k] = v
+		}
+		mapCopy["timestamp"] = time.Now().UTC().Format(time.RFC3339)
 	}
 
 	logData := &OslMessage{
@@ -241,7 +249,7 @@ func (osl *openSearchLane) Write(p []byte) (n int, err error) {
 		JourneyID:    osl.journeyId,
 		LaneID:       osl.LaneId(),
 		LogMessage:   logEntry,
-		Metadata:     osl.metadata,
+		Metadata:     mapCopy,
 	}
 
 	osl.openSearchConnection.logBuffer = append(osl.openSearchConnection.logBuffer, logData)
@@ -322,8 +330,15 @@ func (osc *openSearchConnection) processConnection() {
 			if !osc.config.offline {
 				backoffDuration = osc.send(backoffDuration)
 			}
+
+		case wg := <-osc.clientCh:
+			backoffDuration = osc.send(backoffDuration)
+			osc.client = nil
+			wg.Done()
+
 		}
 	}
+
 }
 
 func (osc *openSearchConnection) send(backoffDuration time.Duration) time.Duration {
