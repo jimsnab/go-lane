@@ -122,9 +122,15 @@ func (osc *openSearchConnection) processConnection() {
 			if !osc.config.offline {
 				backoffDuration = osc.send(backoffDuration)
 			}
+			if osc.config.offline && osc.emergencyFn != nil {
+				osc.handleOfflineWriteToEmergencyFn()
+			}
 		case <-time.After(backoffDuration):
 			if !osc.config.offline {
 				backoffDuration = osc.send(backoffDuration)
+			}
+			if osc.config.offline && osc.emergencyFn != nil {
+				osc.handleOfflineWriteToEmergencyFn()
 			}
 		case wg := <-osc.clientCh:
 			if osc.client != nil && osc.client.Client != nil {
@@ -277,4 +283,18 @@ func newOpenSearchClient(openSearchUrl, openSearchPort, openSearchUser, openSear
 		},
 	)
 	return
+}
+
+func (osc *openSearchConnection) handleOfflineWriteToEmergencyFn() {
+	osc.mu.Lock()
+	defer osc.mu.Unlock()
+	if len(osc.logBuffer) > 0 {
+		err := osc.emergencyFn(osc.logBuffer)
+		if err != nil {
+			osc.messagesSentFailed += len(osc.logBuffer)
+		} else {
+			osc.messagesSent += len(osc.logBuffer)
+		}
+		osc.logBuffer = make([]*OslMessage, 0)
+	}
 }
