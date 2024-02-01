@@ -2,11 +2,11 @@ package lane
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -41,16 +41,18 @@ type OslStats struct {
 }
 
 type OslConfig struct {
-	OpenSearchUrl     string        `json:"openSearchUrl"`
-	OpenSearchPort    string        `json:"openSearchPort"`
-	OpenSearchUser    string        `json:"openSearchUser"`
-	OpenSearchPass    string        `json:"openSearchPass"`
-	OpenSearchIndex   string        `json:"openSearchIndex"`
-	OpenSearchAppName string        `json:"openSearchAppName"`
-	LogThreshold      int           `json:"logThreshold,omitempty"`
-	MaxBufferSize     int           `json:"maxBufferSize,omitempty"`
-	BackoffInterval   time.Duration `json:"backoffInterval,omitempty"`
-	BackOffLimit      time.Duration `json:"backoffLimit,omitempty"`
+	offline             bool
+	OpenSearchUrl       string          `json:"openSearchUrl"`
+	OpenSearchPort      string          `json:"openSearchPort"`
+	OpenSearchUser      string          `json:"openSearchUser"`
+	OpenSearchPass      string          `json:"openSearchPass"`
+	OpenSearchIndex     string          `json:"openSearchIndex"`
+	OpenSearchAppName   string          `json:"openSearchAppName"`
+	OpenSearchTransport *http.Transport `json:"openSearchTransport"`
+	LogThreshold        int             `json:"logThreshold,omitempty"`
+	MaxBufferSize       int             `json:"maxBufferSize,omitempty"`
+	BackoffInterval     time.Duration   `json:"backoffInterval,omitempty"`
+	BackOffLimit        time.Duration   `json:"backoffLimit,omitempty"`
 }
 
 type openSearchLane struct {
@@ -64,9 +66,9 @@ type openSearchConnection struct {
 	mu                 sync.Mutex
 	logBuffer          []*OpenSearchLogMessage
 	stopCh             chan *sync.WaitGroup
-	wakeCh             chan struct{}
+	wakeCh             chan bool
 	refCount           int
-	config             OslConfig
+	config             *OslConfig
 	emergencyFn        OslEmergencyFn
 	ctx                context.Context
 	cancelFn           context.CancelFunc
@@ -78,12 +80,12 @@ type openSearchConnection struct {
 type OpenSearchLane interface {
 	Lane
 	LaneMetadata
-	Connect(config OslConfig) (err error)
+	ReConnect(config *OslConfig) (err error)
 	SetEmergencyHandler(emergencyFn OslEmergencyFn)
 	Stats() (stats OslStats)
 }
 
-func NewOpenSearchLane(ctx context.Context) (l OpenSearchLane) {
+func NewOpenSearchLane(ctx context.Context, config *OslConfig) (l OpenSearchLane) {
 	ll := deriveLogLane(nil, ctx, []Lane{}, "")
 
 	ctx, cancelFn := context.WithCancel(context.Background())
@@ -92,7 +94,7 @@ func NewOpenSearchLane(ctx context.Context) (l OpenSearchLane) {
 		openSearchConnection: &openSearchConnection{
 			logBuffer: make([]*OpenSearchLogMessage, 0),
 			stopCh:    make(chan *sync.WaitGroup, 1),
-			wakeCh:    make(chan struct{}, 1),
+			wakeCh:    make(chan bool, 1),
 			ctx:       ctx,
 			cancelFn:  cancelFn,
 		},
@@ -103,20 +105,38 @@ func NewOpenSearchLane(ctx context.Context) (l OpenSearchLane) {
 	ll.clone(&osl.logLane)
 	osl.logLane.writer = log.New(&osl, "", 0)
 
+	val := reflect.ValueOf(config)
+	if val.Kind() != reflect.Struct {
+		config = &OslConfig{
+			offline: true,
+		}
+	}
+
+	err := osl.connect(config)
+	if err != nil {
+		osl.Error(err)
+	}
+
+	go osl.openSearchConnection.processConnection()
+
 	l = &osl
 
 	return
 
 }
 
-func (osl *openSearchLane) Connect(config OslConfig) (err error) {
-	if osl.openSearchConnection.client != nil {
-		osl.openSearchConnection.wakeCh <- struct{}{}
+func (osl *openSearchLane) connect(config *OslConfig) (err error) {
+	var client *opensearchapi.Client
+
+	if !config.offline && osl.openSearchConnection.client != nil && osl.openSearchConnection.client.Client != nil {
+		osl.openSearchConnection.wakeCh <- true
 	}
 
-	client, err := newOpenSearchClient(config.OpenSearchUrl, config.OpenSearchPort, config.OpenSearchUser, config.OpenSearchPass)
-	if err != nil {
-		return
+	if !config.offline {
+		client, err = newOpenSearchClient(config.OpenSearchUrl, config.OpenSearchPort, config.OpenSearchUser, config.OpenSearchPass, config.OpenSearchTransport)
+		if err != nil {
+			return
+		}
 	}
 	osl.openSearchConnection.client = client
 	osl.openSearchConnection.config = config
@@ -134,10 +154,12 @@ func (osl *openSearchLane) Connect(config OslConfig) (err error) {
 		osl.openSearchConnection.config.BackOffLimit = OslDefaultBackOffLimit
 	}
 
-	go osl.openSearchConnection.processConnection(osl)
-
 	return
 
+}
+
+func (osl *openSearchLane) ReConnect(config *OslConfig) (err error) {
+	return osl.connect(config)
 }
 
 func (osl *openSearchLane) Derive() Lane {
@@ -226,7 +248,7 @@ func (osl *openSearchLane) Write(p []byte) (n int, err error) {
 	osl.openSearchConnection.messagesQueued++
 
 	if ((1 + osl.openSearchConnection.messagesSent - osl.openSearchConnection.messagesQueued) % osl.openSearchConnection.config.LogThreshold) == 0 {
-		osl.openSearchConnection.wakeCh <- struct{}{}
+		osl.openSearchConnection.wakeCh <- false
 	}
 
 	return len(p), nil
@@ -249,7 +271,7 @@ func (osl *openSearchLane) SetEmergencyHandler(emergencyFn OslEmergencyFn) {
 	osl.openSearchConnection.emergencyFn = emergencyFn
 }
 
-func (osc *openSearchConnection) processConnection(l Lane) {
+func (osc *openSearchConnection) processConnection() {
 	backoffDuration := osc.config.BackoffInterval
 
 	for {
@@ -286,10 +308,20 @@ func (osc *openSearchConnection) processConnection(l Lane) {
 
 			wg.Done()
 
-		case <-osc.wakeCh:
-			backoffDuration = osc.send(backoffDuration)
+		case isClientActive := <-osc.wakeCh:
+			if isClientActive {
+				backoffDuration = osc.send(backoffDuration)
+				osc.client = nil
+			} else {
+				if !osc.config.offline {
+					backoffDuration = osc.send(backoffDuration)
+				}
+			}
+
 		case <-time.After(backoffDuration):
-			backoffDuration = osc.send(backoffDuration)
+			if !osc.config.offline {
+				backoffDuration = osc.send(backoffDuration)
+			}
 		}
 	}
 }
@@ -422,19 +454,16 @@ func (osc *openSearchConnection) emergencyLog(formatStr string, args ...any) {
 	}
 }
 
-func newOpenSearchClient(openSearchUrl, openSearchPort, openSearchUser, openSearchPass string) (client *opensearchapi.Client, err error) {
+func newOpenSearchClient(openSearchUrl, openSearchPort, openSearchUser, openSearchPass string, openSearchTransport *http.Transport) (client *opensearchapi.Client, err error) {
 	client, err = opensearchapi.NewClient(
 		opensearchapi.Config{
 			Client: opensearch.Config{
-				Transport: &http.Transport{
-					TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-				},
+				Transport: openSearchTransport,
 				Addresses: []string{fmt.Sprintf("%s:%s", openSearchUrl, openSearchPort)},
 				Username:  openSearchUser,
 				Password:  openSearchPass,
 			},
 		},
 	)
-
 	return
 }
