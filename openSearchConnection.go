@@ -13,16 +13,37 @@ import (
 	"github.com/opensearch-project/opensearch-go/v3/opensearchapi"
 )
 
+const (
+	OscDefaultLogThreshold    = 5
+	OscDefaultMaxBufferSize   = 10
+	OscDefaultBackoffInterval = 10 * time.Second
+	OscDefaultBackOffLimit    = 10 * time.Minute
+)
+
+type OscConfig struct {
+	offline             bool
+	OpenSearchUrl       string          `json:"openSearchUrl"`
+	OpenSearchPort      string          `json:"openSearchPort"`
+	OpenSearchUser      string          `json:"openSearchUser"`
+	OpenSearchPass      string          `json:"openSearchPass"`
+	OpenSearchIndex     string          `json:"openSearchIndex"`
+	OpenSearchAppName   string          `json:"openSearchAppName"`
+	OpenSearchTransport *http.Transport `json:"openSearchTransport"`
+	LogThreshold        int             `json:"logThreshold,omitempty"`
+	MaxBufferSize       int             `json:"maxBufferSize,omitempty"`
+	BackoffInterval     time.Duration   `json:"backoffInterval,omitempty"`
+	BackOffLimit        time.Duration   `json:"backoffLimit,omitempty"`
+}
+
 type openSearchConnection struct {
 	client             *opensearchapi.Client
-	connectMu          sync.Mutex
-	laneMu             sync.Mutex
+    clientMu           sync.Mutex
+	mu                 sync.Mutex
 	logBuffer          []*OslMessage
 	stopCh             chan *sync.WaitGroup
 	wakeCh             chan struct{}
-	clientCh           chan clientChParams
 	refCount           int
-	config             *OslConfig
+	config             *OscConfig
 	emergencyFn        OslEmergencyFn
 	ctx                context.Context
 	cancelFn           context.CancelFunc
@@ -31,18 +52,16 @@ type openSearchConnection struct {
 	messagesSentFailed int
 }
 
-type clientChParams struct {
-	wg     *sync.WaitGroup
-	config *OslConfig
-}
+func (osc *openSearchConnection) connect(config *OscConfig) (err error) {
+    osc.clientMu.Lock()
 
-func (osc *openSearchConnection) connect(config *OslConfig) (err error) {
-	var client *opensearchapi.Client
+    var client *opensearchapi.Client
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	osc.clientCh <- clientChParams{wg: &wg, config: config}
-	wg.Wait()
+    if !config.offline && osc.client != nil && osc.client.Client != nil {
+        osc.client = nil
+        osc.wakeCh <- struct{}{}
+    }
+
 
 	if !config.offline {
 		client, err = newOpenSearchClient(config.OpenSearchUrl, config.OpenSearchPort, config.OpenSearchUser, config.OpenSearchPass, config.OpenSearchTransport)
@@ -50,24 +69,30 @@ func (osc *openSearchConnection) connect(config *OslConfig) (err error) {
 			return
 		}
 	}
+
 	osc.client = client
 	osc.config = config
 
 	if config.LogThreshold == 0 {
-		osc.config.LogThreshold = OslDefaultLogThreshold
+		osc.config.LogThreshold = OscDefaultLogThreshold
 	}
 	if config.MaxBufferSize == 0 {
-		osc.config.MaxBufferSize = OslDefaultMaxBufferSize
+		osc.config.MaxBufferSize = OscDefaultMaxBufferSize
 	}
 	if config.BackoffInterval == 0 {
-		osc.config.BackoffInterval = OslDefaultBackoffInterval
+		osc.config.BackoffInterval = OscDefaultBackoffInterval
 	}
 	if config.BackOffLimit == 0 {
-		osc.config.BackOffLimit = OslDefaultBackOffLimit
+		osc.config.BackOffLimit = OscDefaultBackOffLimit
 	}
+    osc.clientMu.Unlock()
 
 	return
 
+}
+
+func (osc *openSearchConnection) reconnect(config *OscConfig) (err error) {
+	return osc.connect(config)
 }
 
 func (osc *openSearchConnection) processConnection() {
@@ -77,14 +102,14 @@ func (osc *openSearchConnection) processConnection() {
 		select {
 		case wg := <-osc.stopCh:
 			shouldStop := false
-			osc.connectMu.Lock()
+			osc.mu.Lock()
 			osc.refCount--
 			shouldStop = (osc.refCount == 0)
-			osc.connectMu.Unlock()
+			osc.mu.Unlock()
 
 			if shouldStop {
 				go func() {
-					osc.connectMu.Lock()
+					osc.mu.Lock()
 					if len(osc.logBuffer) > 0 {
 						err := osc.flush(osc.logBuffer)
 						if err != nil {
@@ -99,7 +124,7 @@ func (osc *openSearchConnection) processConnection() {
 						}
 						osc.logBuffer = make([]*OslMessage, 0)
 					}
-					osc.connectMu.Unlock()
+					osc.mu.Unlock()
 					wg.Done()
 				}()
 				return
@@ -116,26 +141,19 @@ func (osc *openSearchConnection) processConnection() {
 			if !osc.config.offline {
 				backoffDuration = osc.send(backoffDuration)
 			}
-
-		case chParams := <-osc.clientCh:
-			if !chParams.config.offline && osc.client != nil && osc.client.Client != nil {
-				backoffDuration = osc.send(backoffDuration)
-				osc.client = nil
-			}
-			chParams.wg.Done()
-
 		}
 	}
 
 }
 
 func (osc *openSearchConnection) send(backoffDuration time.Duration) time.Duration {
-	osc.connectMu.Lock()
+	osc.mu.Lock()
 	logBuffer := osc.logBuffer
 	osc.logBuffer = make([]*OslMessage, 0)
-	osc.connectMu.Unlock()
+	osc.mu.Unlock()
 
 	if len(logBuffer) > 0 {
+        osc.clientMu.Lock()
 		err := osc.flush(logBuffer)
 		if err != nil {
 			if len(logBuffer) > osc.config.MaxBufferSize {
@@ -151,23 +169,24 @@ func (osc *openSearchConnection) send(backoffDuration time.Duration) time.Durati
 				if backoffDuration > osc.config.BackOffLimit {
 					backoffDuration = osc.config.BackOffLimit
 				}
-				osc.connectMu.Lock()
+				osc.mu.Lock()
 				osc.logBuffer = append(logBuffer, osc.logBuffer...)
-				osc.connectMu.Unlock()
+				osc.mu.Unlock()
 			}
 		} else {
 			osc.messagesSent += len(logBuffer)
 			backoffDuration = osc.config.BackoffInterval
 			osc.messagesQueued = 0
 		}
+        osc.clientMu.Unlock()
 	}
 
 	return backoffDuration
 }
 
 func (osc *openSearchConnection) attach() {
-	osc.connectMu.Lock()
-	defer osc.connectMu.Unlock()
+	osc.mu.Lock()
+	defer osc.mu.Unlock()
 	osc.refCount++
 }
 

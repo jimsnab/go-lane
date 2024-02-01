@@ -4,19 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
 	"reflect"
 	"strings"
 	"sync"
 	"time"
-)
-
-// TODO change default values
-const (
-	OslDefaultLogThreshold    = 5
-	OslDefaultMaxBufferSize   = 10
-	OslDefaultBackoffInterval = 10 * time.Second
-	OslDefaultBackOffLimit    = 10 * time.Minute
 )
 
 type OslMessage struct {
@@ -36,37 +27,21 @@ type OslStats struct {
 	MessagesSentFailed int `json:"messagesSentFailed"`
 }
 
-type OslConfig struct {
-	offline             bool
-	OpenSearchUrl       string          `json:"openSearchUrl"`
-	OpenSearchPort      string          `json:"openSearchPort"`
-	OpenSearchUser      string          `json:"openSearchUser"`
-	OpenSearchPass      string          `json:"openSearchPass"`
-	OpenSearchIndex     string          `json:"openSearchIndex"`
-	OpenSearchAppName   string          `json:"openSearchAppName"`
-	OpenSearchTransport *http.Transport `json:"openSearchTransport"`
-	LogThreshold        int             `json:"logThreshold,omitempty"`
-	MaxBufferSize       int             `json:"maxBufferSize,omitempty"`
-	BackoffInterval     time.Duration   `json:"backoffInterval,omitempty"`
-	BackOffLimit        time.Duration   `json:"backoffLimit,omitempty"`
-}
-
 type openSearchLane struct {
 	logLane
 	openSearchConnection *openSearchConnection
 	metadata             map[string]string
-	mu                   sync.Mutex
 }
 
 type OpenSearchLane interface {
 	Lane
 	LaneMetadata
-	Reconnect(config *OslConfig) (err error)
+	Reconnect(config *OscConfig) (err error)
 	SetEmergencyHandler(emergencyFn OslEmergencyFn)
 	Stats() (stats OslStats)
 }
 
-func NewOpenSearchLane(ctx context.Context, config *OslConfig) (l OpenSearchLane) {
+func NewOpenSearchLane(ctx context.Context, config *OscConfig) (l OpenSearchLane) {
 	ll := deriveLogLane(nil, ctx, []Lane{}, "")
 
 	ctx, cancelFn := context.WithCancel(context.Background())
@@ -76,7 +51,6 @@ func NewOpenSearchLane(ctx context.Context, config *OslConfig) (l OpenSearchLane
 			logBuffer: make([]*OslMessage, 0),
 			stopCh:    make(chan *sync.WaitGroup, 1),
 			wakeCh:    make(chan struct{}, 1),
-			clientCh:  make(chan clientChParams, 1),
 			ctx:       ctx,
 			cancelFn:  cancelFn,
 		},
@@ -89,7 +63,7 @@ func NewOpenSearchLane(ctx context.Context, config *OslConfig) (l OpenSearchLane
 
 	val := reflect.ValueOf(config)
 	if val.Kind() != reflect.Struct {
-		config = &OslConfig{
+		config = &OscConfig{
 			offline: true,
 		}
 		osl.openSearchConnection.config = config
@@ -108,10 +82,8 @@ func NewOpenSearchLane(ctx context.Context, config *OslConfig) (l OpenSearchLane
 
 }
 
-func (osl *openSearchLane) Reconnect(config *OslConfig) (err error) {
-	osl.openSearchConnection.laneMu.Lock()
-	defer osl.openSearchConnection.laneMu.Unlock()
-	return osl.openSearchConnection.connect(config)
+func (osl *openSearchLane) Reconnect(config *OscConfig) (err error) {
+	return osl.openSearchConnection.reconnect(config)
 }
 
 func (osl *openSearchLane) Derive() Lane {
