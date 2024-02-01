@@ -23,7 +23,7 @@ const (
 	OslDefaultBackOffLimit    = 10 * time.Minute
 )
 
-type OpenSearchLogMessage struct {
+type OslMessage struct {
 	AppName      string            `json:"appName"`
 	ParentLaneId string            `json:"parentLaneId,omitempty"`
 	JourneyID    string            `json:"journeyId,omitempty"`
@@ -32,7 +32,7 @@ type OpenSearchLogMessage struct {
 	Metadata     map[string]string `json:"metadata,omitempty"`
 }
 
-type OslEmergencyFn func(logBuffer []*OpenSearchLogMessage) (err error)
+type OslEmergencyFn func(logBuffer []*OslMessage) (err error)
 
 type OslStats struct {
 	MessagesQueued     int `json:"messagesQueued"`
@@ -64,7 +64,7 @@ type openSearchLane struct {
 type openSearchConnection struct {
 	client             *opensearchapi.Client
 	mu                 sync.Mutex
-	logBuffer          []*OpenSearchLogMessage
+	logBuffer          []*OslMessage
 	stopCh             chan *sync.WaitGroup
 	wakeCh             chan bool
 	refCount           int
@@ -92,7 +92,7 @@ func NewOpenSearchLane(ctx context.Context, config *OslConfig) (l OpenSearchLane
 
 	osl := openSearchLane{
 		openSearchConnection: &openSearchConnection{
-			logBuffer: make([]*OpenSearchLogMessage, 0),
+			logBuffer: make([]*OslMessage, 0),
 			stopCh:    make(chan *sync.WaitGroup, 1),
 			wakeCh:    make(chan bool, 1),
 			ctx:       ctx,
@@ -130,6 +130,7 @@ func (osl *openSearchLane) connect(config *OslConfig) (err error) {
 
 	if !config.offline && osl.openSearchConnection.client != nil && osl.openSearchConnection.client.Client != nil {
 		osl.openSearchConnection.wakeCh <- true
+		osl.openSearchConnection.client = nil
 	}
 
 	if !config.offline {
@@ -234,7 +235,7 @@ func (osl *openSearchLane) Write(p []byte) (n int, err error) {
 		osl.metadata["timestamp"] = time.Now().UTC().Format(time.RFC3339)
 	}
 
-	logData := &OpenSearchLogMessage{
+	logData := &OslMessage{
 		AppName:      osl.openSearchConnection.config.OpenSearchAppName,
 		ParentLaneId: parentLaneId,
 		JourneyID:    osl.journeyId,
@@ -298,7 +299,7 @@ func (osc *openSearchConnection) processConnection() {
 								}
 							}
 						}
-						osc.logBuffer = make([]*OpenSearchLogMessage, 0)
+						osc.logBuffer = make([]*OslMessage, 0)
 					}
 					osc.mu.Unlock()
 					wg.Done()
@@ -308,10 +309,9 @@ func (osc *openSearchConnection) processConnection() {
 
 			wg.Done()
 
-		case isClientActive := <-osc.wakeCh:
-			if isClientActive {
+		case condition := <-osc.wakeCh:
+			if condition {
 				backoffDuration = osc.send(backoffDuration)
-				osc.client = nil
 			} else {
 				if !osc.config.offline {
 					backoffDuration = osc.send(backoffDuration)
@@ -329,7 +329,7 @@ func (osc *openSearchConnection) processConnection() {
 func (osc *openSearchConnection) send(backoffDuration time.Duration) time.Duration {
 	osc.mu.Lock()
 	logBuffer := osc.logBuffer
-	osc.logBuffer = make([]*OpenSearchLogMessage, 0)
+	osc.logBuffer = make([]*OslMessage, 0)
 	osc.mu.Unlock()
 
 	if len(logBuffer) > 0 {
@@ -375,7 +375,7 @@ func (osc *openSearchConnection) detach() {
 	wg.Wait()
 }
 
-func (osc *openSearchConnection) flush(logBuffer []*OpenSearchLogMessage) (err error) {
+func (osc *openSearchConnection) flush(logBuffer []*OslMessage) (err error) {
 	if len(logBuffer) > 0 {
 		err = osc.bulkInsert(logBuffer)
 		if err != nil {
@@ -385,7 +385,7 @@ func (osc *openSearchConnection) flush(logBuffer []*OpenSearchLogMessage) (err e
 	return
 }
 
-func (osc *openSearchConnection) bulkInsert(logBuffer []*OpenSearchLogMessage) (err error) {
+func (osc *openSearchConnection) bulkInsert(logBuffer []*OslMessage) (err error) {
 
 	jsonData, err := osc.generateBulkJson(logBuffer)
 	if err != nil {
@@ -404,7 +404,7 @@ func (osc *openSearchConnection) bulkInsert(logBuffer []*OpenSearchLogMessage) (
 	return
 }
 
-func (osc *openSearchConnection) generateBulkJson(logBuffer []*OpenSearchLogMessage) (jsonData string, err error) {
+func (osc *openSearchConnection) generateBulkJson(logBuffer []*OslMessage) (jsonData string, err error) {
 	var lines []string
 	var createLine []byte
 	var logDataLine []byte
@@ -434,7 +434,7 @@ func (osc *openSearchConnection) generateBulkJson(logBuffer []*OpenSearchLogMess
 func (osc *openSearchConnection) emergencyLog(formatStr string, args ...any) {
 	msg := fmt.Sprintf(formatStr, args...)
 
-	oslm := &OpenSearchLogMessage{
+	oslm := &OslMessage{
 		AppName:    "OpenSearchLane",
 		LogMessage: msg,
 	}
@@ -442,7 +442,7 @@ func (osc *openSearchConnection) emergencyLog(formatStr string, args ...any) {
 	oslm.Metadata = make(map[string]string)
 	oslm.Metadata["timestamp"] = time.Now().UTC().Format(time.RFC3339)
 
-	logBuffer := []*OpenSearchLogMessage{oslm}
+	logBuffer := []*OslMessage{oslm}
 
 	if osc.emergencyFn != nil {
 		err := osc.emergencyFn(logBuffer)
