@@ -18,6 +18,10 @@ const (
 type (
 	LaneLogLevel int
 
+	LaneMetadata interface {
+		SetMetadata(key, val string)
+	}
+
 	Lane interface {
 		context.Context
 
