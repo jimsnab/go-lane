@@ -13,7 +13,7 @@ import (
 	"github.com/opensearch-project/opensearch-go/v3/opensearchapi"
 )
 
-// Struct representing a connection to OpenSearch
+// Struct encapsulating the connection and management logic for interacting with OpenSearch.
 type openSearchConnection struct {
 	client             *opensearchapi.Client
 	clientMu           sync.Mutex

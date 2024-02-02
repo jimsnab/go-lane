@@ -11,22 +11,26 @@ import (
 )
 
 const (
-	//Default threshold for logging messages
-	OslDefaultLogThreshold    = 100
-	//Default maximum buffer size for log messages 
-	OslDefaultMaxBufferSize   = 100
-	//Default interval for backoff logic
+	// Represents the default threshold for logging messages.
+	// Determines the size at which the log messages buffer triggers bulk insertion.
+	OslDefaultLogThreshold = 100
+	// Denotes the default maximum buffer size for log messages.
+	// Controls the size limit of the buffer used for storing log messages.
+	OslDefaultMaxBufferSize = 100
+	// Defines the default interval for the backoff logic.
+	// Specifies the duration between consecutive attempts to reconnect or resend messages in case of failures.
 	OslDefaultBackoffInterval = 10 * time.Second
-	//Default maximum duration for backoff intervals
-	OslDefaultBackOffLimit    = 10 * time.Minute
+	// Specifies the default maximum duration for backoff intervals.
+	// Limits the time span within which backoff attempts are made before considering a connection or message sending attempt as failed.
+	OslDefaultBackOffLimit = 10 * time.Minute
 )
 
 type (
 
-	//Function type used for handling emergency situations in logging.
+	// Function type for the callback invoked when log messages are about to be lost because OpenSearch cannot be reached.
 	OslEmergencyFn func(logBuffer []*OslMessage) (err error)
 
-	//Configuration struct for OpenSearch connection setting
+	// Configuration struct for OpenSearch connection settings.
 	OslConfig struct {
 		offline             bool
 		OpenSearchUrl       string          `json:"openSearchUrl"`
@@ -42,7 +46,7 @@ type (
 		BackOffLimit        time.Duration   `json:"backoffLimit,omitempty"`
 	}
 
-	//Struct representing a log message in OpenSearch
+	// Struct representing a log message in OpenSearch.
 	OslMessage struct {
 		AppName      string            `json:"appName"`
 		ParentLaneId string            `json:"parentLaneId,omitempty"`
@@ -52,21 +56,21 @@ type (
 		Metadata     map[string]string `json:"metadata,omitempty"`
 	}
 
-	// Struct holding statistics about message queues and sent messages in OpenSearch logging
+	// Struct holding statistics about message queues and sent messages in OpenSearch logging.
 	OslStats struct {
 		MessagesQueued     int `json:"messagesQueued"`
 		MessagesSent       int `json:"messagesSent"`
 		MessagesSentFailed int `json:"messagesSentFailed"`
 	}
 
-	//Struct representing a lane in OpenSearch logging
+	// Struct representing a lane in OpenSearch logging.
 	openSearchLane struct {
 		logLane
 		openSearchConnection *openSearchConnection
 		metadata             map[string]string
 	}
 
-	//Interface defining methods for a lane in OpenSearch logging
+	// Interface defining methods for a lane in OpenSearch logging.
 	OpenSearchLane interface {
 		Lane
 		LaneMetadata
