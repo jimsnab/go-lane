@@ -400,6 +400,10 @@ func (tl *testingLane) DeriveReplaceContext(ctx context.Context) Lane {
 	defer tl.mu.Unlock()
 	l.SetLogLevel(tl.level)
 
+	for _, tee := range tl.tees {
+		l.AddTee(tee)
+	}
+
 	return l
 }
 

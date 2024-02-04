@@ -134,6 +134,9 @@ func (nl *nullLane) DeriveWithTimeout(duration time.Duration) (Lane, context.Can
 func (nl *nullLane) DeriveReplaceContext(ctx context.Context) Lane {
 	l := NewNullLane(ctx)
 	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
+	for _, tee := range nl.tees {
+		l.AddTee(tee)
+	}
 	return l
 }
 

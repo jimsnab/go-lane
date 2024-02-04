@@ -347,7 +347,7 @@ func TestTeeTest(t *testing.T) {
 	}
 }
 
-func TestTeeTestDerive(t *testing.T) {
+func TestTeeTestDerive1(t *testing.T) {
 	tlv := NewTestingLane(context.Background())
 
 	tl := NewTestingLane(context.Background())
@@ -360,19 +360,25 @@ func TestTeeTestDerive(t *testing.T) {
 	tl2.Debug("debug", 1)
 	tl2.Debugf("%s %d", "debugf", 1)
 
-	tl3, _ := tl2.DeriveWithCancel()
+	tl3, cf := tl2.DeriveWithCancel()
 	tl3.Info("info", 1)
 	tl3.Infof("%s %d", "infof", 1)
+	cf() // free chan resource
 
-	tl4, _ := tl.DeriveWithDeadline(time.Now().Add(time.Hour))
+	tl4, cf := tl.DeriveWithDeadline(time.Now().Add(time.Hour))
 	tl4.Warn("warn", 1)
 	tl4.Warnf("%s %d", "warnf", 1)
+	cf() // free chan resource
 
-	tl5, _ := tl3.DeriveWithTimeout(time.Hour)
+	tl5, cf := tl3.DeriveWithTimeout(time.Hour)
 	tl5.Error("error", 1)
 	tl5.Errorf("%s %d", "errorf", 1)
 	tl5.PreFatal("fatal", 1)
 	tl5.PreFatalf("%s %d", "fatalf", 1)
+	cf() // free chan resource
+
+	tl6 := tl5.DeriveReplaceContext(context.Background())
+	tl6.Trace("trace", 2)
 
 	events := []*LaneEvent{}
 	events = append(events, &LaneEvent{Level: "TRACE", Message: "trace 1"})
@@ -392,6 +398,247 @@ func TestTeeTestDerive(t *testing.T) {
 
 	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatal 1"})
 	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatalf 1"})
+
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "trace 2"})
+
+	if !tlv.VerifyEvents(events) {
+		t.Errorf("Test events don't match")
+	}
+}
+
+func TestTeeTestDerive2(t *testing.T) {
+	tlv := NewTestingLane(context.Background())
+
+	tl := NewNullLane(context.Background())
+	tl.AddTee(tlv)
+
+	tl.Trace("trace", 1)
+	tl.Tracef("%s %d", "tracef", 1)
+
+	tl2 := tl.Derive()
+	tl2.Debug("debug", 1)
+	tl2.Debugf("%s %d", "debugf", 1)
+
+	tl3, cf := tl2.DeriveWithCancel()
+	tl3.Info("info", 1)
+	tl3.Infof("%s %d", "infof", 1)
+	cf() // free chan resource
+
+	tl4, cf := tl.DeriveWithDeadline(time.Now().Add(time.Hour))
+	tl4.Warn("warn", 1)
+	tl4.Warnf("%s %d", "warnf", 1)
+	cf() // free chan resource
+
+	tl5, cf := tl3.DeriveWithTimeout(time.Hour)
+	tl5.Error("error", 1)
+	tl5.Errorf("%s %d", "errorf", 1)
+	tl5.PreFatal("fatal", 1)
+	tl5.PreFatalf("%s %d", "fatalf", 1)
+	cf() // free chan resource
+
+	tl6 := tl5.DeriveReplaceContext(context.Background())
+	tl6.Trace("trace", 2)
+
+	events := []*LaneEvent{}
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "trace 1"})
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "tracef 1"})
+
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debug 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debugf 1"})
+
+	events = append(events, &LaneEvent{Level: "INFO", Message: "info 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "infof 1"})
+
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warn 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warnf 1"})
+
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "error 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "errorf 1"})
+
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatal 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatalf 1"})
+
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "trace 2"})
+
+	if !tlv.VerifyEvents(events) {
+		t.Errorf("Test events don't match")
+	}
+}
+
+func TestTeeTestDerive3(t *testing.T) {
+	tlv := NewTestingLane(context.Background())
+
+	tl := NewLogLane(context.Background())
+	tl.AddTee(tlv)
+
+	tl.Trace("trace", 1)
+	tl.Tracef("%s %d", "tracef", 1)
+
+	tl2 := tl.Derive()
+	tl2.Debug("debug", 1)
+	tl2.Debugf("%s %d", "debugf", 1)
+
+	tl3, cf := tl2.DeriveWithCancel()
+	tl3.Info("info", 1)
+	tl3.Infof("%s %d", "infof", 1)
+	cf() // free chan resource
+
+	tl4, cf := tl.DeriveWithDeadline(time.Now().Add(time.Hour))
+	tl4.Warn("warn", 1)
+	tl4.Warnf("%s %d", "warnf", 1)
+	cf() // free chan resource
+
+	tl5, cf := tl3.DeriveWithTimeout(time.Hour)
+	tl5.Error("error", 1)
+	tl5.Errorf("%s %d", "errorf", 1)
+	tl5.PreFatal("fatal", 1)
+	tl5.PreFatalf("%s %d", "fatalf", 1)
+	cf() // free chan resource
+
+	tl6 := tl5.DeriveReplaceContext(context.Background())
+	tl6.Trace("trace", 2)
+
+	events := []*LaneEvent{}
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "trace 1"})
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "tracef 1"})
+
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debug 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debugf 1"})
+
+	events = append(events, &LaneEvent{Level: "INFO", Message: "info 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "infof 1"})
+
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warn 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warnf 1"})
+
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "error 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "errorf 1"})
+
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatal 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatalf 1"})
+
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "trace 2"})
+
+	if !tlv.VerifyEvents(events) {
+		t.Errorf("Test events don't match")
+	}
+}
+
+func TestTeeTestDerive4(t *testing.T) {
+	tlv := NewTestingLane(context.Background())
+
+	tl := NewOpenSearchLane(context.Background(), nil)
+	tl.AddTee(tlv)
+
+	tl.Trace("trace", 1)
+	tl.Tracef("%s %d", "tracef", 1)
+
+	tl2 := tl.Derive()
+	tl2.Debug("debug", 1)
+	tl2.Debugf("%s %d", "debugf", 1)
+
+	tl3, cf := tl2.DeriveWithCancel()
+	tl3.Info("info", 1)
+	tl3.Infof("%s %d", "infof", 1)
+	cf() // free chan resource
+
+	tl4, cf := tl.DeriveWithDeadline(time.Now().Add(time.Hour))
+	tl4.Warn("warn", 1)
+	tl4.Warnf("%s %d", "warnf", 1)
+	cf() // free chan resource
+
+	tl5, cf := tl3.DeriveWithTimeout(time.Hour)
+	tl5.Error("error", 1)
+	tl5.Errorf("%s %d", "errorf", 1)
+	tl5.PreFatal("fatal", 1)
+	tl5.PreFatalf("%s %d", "fatalf", 1)
+	cf() // free chan resource
+
+	tl6 := tl5.DeriveReplaceContext(context.Background())
+	tl6.Trace("trace", 2)
+
+	events := []*LaneEvent{}
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "trace 1"})
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "tracef 1"})
+
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debug 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debugf 1"})
+
+	events = append(events, &LaneEvent{Level: "INFO", Message: "info 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "infof 1"})
+
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warn 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warnf 1"})
+
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "error 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "errorf 1"})
+
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatal 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatalf 1"})
+
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "trace 2"})
+
+	if !tlv.VerifyEvents(events) {
+		t.Errorf("Test events don't match")
+	}
+}
+
+func TestTeeTestDerive5(t *testing.T) {
+	tlv := NewTestingLane(context.Background())
+
+	tl, err := NewDiskLane(context.Background(), "test.log")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tl.AddTee(tlv)
+
+	tl.Trace("trace", 1)
+	tl.Tracef("%s %d", "tracef", 1)
+
+	tl2 := tl.Derive()
+	tl2.Debug("debug", 1)
+	tl2.Debugf("%s %d", "debugf", 1)
+
+	tl3, cf := tl2.DeriveWithCancel()
+	tl3.Info("info", 1)
+	tl3.Infof("%s %d", "infof", 1)
+	cf() // free chan resource
+
+	tl4, cf := tl.DeriveWithDeadline(time.Now().Add(time.Hour))
+	tl4.Warn("warn", 1)
+	tl4.Warnf("%s %d", "warnf", 1)
+	cf() // free chan resource
+
+	tl5, cf := tl3.DeriveWithTimeout(time.Hour)
+	tl5.Error("error", 1)
+	tl5.Errorf("%s %d", "errorf", 1)
+	tl5.PreFatal("fatal", 1)
+	tl5.PreFatalf("%s %d", "fatalf", 1)
+	cf() // free chan resource
+
+	tl6 := tl5.DeriveReplaceContext(context.Background())
+	tl6.Trace("trace", 2)
+
+	events := []*LaneEvent{}
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "trace 1"})
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "tracef 1"})
+
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debug 1"})
+	events = append(events, &LaneEvent{Level: "DEBUG", Message: "debugf 1"})
+
+	events = append(events, &LaneEvent{Level: "INFO", Message: "info 1"})
+	events = append(events, &LaneEvent{Level: "INFO", Message: "infof 1"})
+
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warn 1"})
+	events = append(events, &LaneEvent{Level: "WARN", Message: "warnf 1"})
+
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "error 1"})
+	events = append(events, &LaneEvent{Level: "ERROR", Message: "errorf 1"})
+
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatal 1"})
+	events = append(events, &LaneEvent{Level: "FATAL", Message: "fatalf 1"})
+
+	events = append(events, &LaneEvent{Level: "TRACE", Message: "trace 2"})
 
 	if !tlv.VerifyEvents(events) {
 		t.Errorf("Test events don't match")
