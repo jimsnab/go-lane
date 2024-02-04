@@ -975,7 +975,7 @@ func TestLogLaneWithDeadlineExpire(t *testing.T) {
 }
 
 func verifyLogLaneEvents(t *testing.T, ll Lane, expected string, buf bytes.Buffer) {
-	v := ll.Value(log_lane_id)
+	v := ll.Value(LogLaneIdKey)
 	if v == nil {
 		t.Fatal("missing lane id in context")
 	}

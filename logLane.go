@@ -46,7 +46,7 @@ type (
 	// Callback for creating a new derived context. If the context returned by
 	// the callback is not derived from newCtx, the returned context must
 	// contain the context value key laneIdKey with value id.
-	DeriveContext func(newCtx context.Context, laneIdKey laneId, id string) context.Context
+	deriveContext func(newCtx context.Context, id string) context.Context
 
 	// Callback invoked when a derived context is created. It is used by log
 	// lane types that embed a log lane. It allows the outer lane type to
@@ -55,8 +55,11 @@ type (
 	OnCreateLane func(parentLane Lane) (newLane Lane, ll LogLane, writer *log.Logger, err error)
 )
 
-const log_lane_id = laneId("log_lane_id")
-const parent_lane_id = laneId("parent_lane_id")
+// Context key for the lane ID
+const LogLaneIdKey = laneId("log_lane_id")
+
+// Context key for the parent lane ID
+const ParentLaneIdKey = laneId("parent_lane_id")
 
 func isLogCrLf() bool {
 	var buf bytes.Buffer
@@ -102,7 +105,7 @@ func AllocEmbeddedLogLane() LogLane {
 }
 
 // Convenience wrapper that makes a new logLane object and calls initialize() on it
-func deriveLogLane(parent *logLane, startingCtx context.Context, contextCallback DeriveContext, createLane OnCreateLane) (ll *logLane, err error) {
+func deriveLogLane(parent *logLane, startingCtx context.Context, contextCallback deriveContext, createLane OnCreateLane) (ll *logLane, err error) {
 	var parentOuter Lane
 	if parent != nil {
 		parentOuter = parent.outer
@@ -117,7 +120,7 @@ func deriveLogLane(parent *logLane, startingCtx context.Context, contextCallback
 }
 
 // Sets all the fields of a zero-initialized ll
-func (ll *logLane) initialize(laneOuter Lane, pll *logLane, startingCtx context.Context, contextCallback DeriveContext, onCreate OnCreateLane, writer *log.Logger) {
+func (ll *logLane) initialize(laneOuter Lane, pll *logLane, startingCtx context.Context, contextCallback deriveContext, onCreate OnCreateLane, writer *log.Logger) {
 	ll.stackTrace = make([]atomic.Bool, int(LogLevelFatal+1))
 	ll.onCreateLane = onCreate // keep this reference so that future Derive() calls can invoke it
 	ll.SetPanicHandler(nil)
@@ -157,12 +160,12 @@ func (ll *logLane) initialize(laneOuter Lane, pll *logLane, startingCtx context.
 	}
 
 	if pll != nil {
-		newCtx = context.WithValue(context.WithValue(startingCtx, log_lane_id, id), parent_lane_id, pll.LaneId())
+		newCtx = context.WithValue(context.WithValue(startingCtx, LogLaneIdKey, id), ParentLaneIdKey, pll.LaneId())
 	} else {
-		newCtx = context.WithValue(startingCtx, log_lane_id, id)
+		newCtx = context.WithValue(startingCtx, LogLaneIdKey, id)
 	}
 	if contextCallback != nil {
-		ll.Context = contextCallback(newCtx, log_lane_id, id)
+		ll.Context = contextCallback(newCtx, id)
 	} else {
 		ll.Context = newCtx
 	}
@@ -382,7 +385,7 @@ func (ll *logLane) Derive() Lane {
 
 func (ll *logLane) DeriveWithCancel() (Lane, context.CancelFunc) {
 	var cancelFn context.CancelFunc
-	makeContext := func(newCtx context.Context, laneIdKey laneId, id string) context.Context {
+	makeContext := func(newCtx context.Context, id string) context.Context {
 		var childCtx context.Context
 		childCtx, cancelFn = context.WithCancel(newCtx)
 		return childCtx
@@ -396,7 +399,7 @@ func (ll *logLane) DeriveWithCancel() (Lane, context.CancelFunc) {
 
 func (ll *logLane) DeriveWithDeadline(deadline time.Time) (Lane, context.CancelFunc) {
 	var cancelFn context.CancelFunc
-	makeContext := func(newCtx context.Context, laneIdKey laneId, id string) context.Context {
+	makeContext := func(newCtx context.Context, id string) context.Context {
 		var childCtx context.Context
 		childCtx, cancelFn = context.WithDeadline(newCtx, deadline)
 		return childCtx
@@ -410,7 +413,7 @@ func (ll *logLane) DeriveWithDeadline(deadline time.Time) (Lane, context.CancelF
 
 func (ll *logLane) DeriveWithTimeout(duration time.Duration) (Lane, context.CancelFunc) {
 	var cancelFn context.CancelFunc
-	makeContext := func(newCtx context.Context, laneIdKey laneId, id string) context.Context {
+	makeContext := func(newCtx context.Context, id string) context.Context {
 		var childCtx context.Context
 		childCtx, cancelFn = context.WithTimeout(newCtx, duration)
 		return childCtx
@@ -423,8 +426,8 @@ func (ll *logLane) DeriveWithTimeout(duration time.Duration) (Lane, context.Canc
 }
 
 func (ll *logLane) DeriveReplaceContext(ctx context.Context) Lane {
-	makeContext := func(newCtx context.Context, laneIdKey laneId, id string) context.Context {
-		return context.WithValue(ctx, laneIdKey, id)
+	makeContext := func(newCtx context.Context, id string) context.Context {
+		return context.WithValue(ctx, LogLaneIdKey, id)
 	}
 	l, err := deriveLogLane(ll, ctx, makeContext, ll.onCreateLane)
 	if err != nil {
@@ -434,7 +437,7 @@ func (ll *logLane) DeriveReplaceContext(ctx context.Context) Lane {
 }
 
 func (ll *logLane) LaneId() string {
-	return ll.Value(log_lane_id).(string)
+	return ll.Value(LogLaneIdKey).(string)
 }
 
 func (ll *logLane) EnableStackTrace(level LaneLogLevel, enable bool) bool {

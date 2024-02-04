@@ -351,7 +351,7 @@ func (tl *testingLane) Close() {
 }
 
 func (tl *testingLane) Derive() Lane {
-	l := deriveTestingLane(context.WithValue(tl.Context, parent_lane_id, tl.LaneId()), tl, tl.tees)
+	l := deriveTestingLane(context.WithValue(tl.Context, ParentLaneIdKey, tl.LaneId()), tl, tl.tees)
 
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
@@ -361,7 +361,7 @@ func (tl *testingLane) Derive() Lane {
 }
 
 func (tl *testingLane) DeriveWithCancel() (Lane, context.CancelFunc) {
-	childCtx, cancelFn := context.WithCancel(context.WithValue(tl.Context, parent_lane_id, tl.LaneId()))
+	childCtx, cancelFn := context.WithCancel(context.WithValue(tl.Context, ParentLaneIdKey, tl.LaneId()))
 	l := deriveTestingLane(childCtx, tl, tl.tees)
 
 	tl.mu.Lock()
@@ -372,7 +372,7 @@ func (tl *testingLane) DeriveWithCancel() (Lane, context.CancelFunc) {
 }
 
 func (tl *testingLane) DeriveWithDeadline(deadline time.Time) (Lane, context.CancelFunc) {
-	childCtx, cancelFn := context.WithDeadline(context.WithValue(tl.Context, parent_lane_id, tl.LaneId()), deadline)
+	childCtx, cancelFn := context.WithDeadline(context.WithValue(tl.Context, ParentLaneIdKey, tl.LaneId()), deadline)
 	l := deriveTestingLane(childCtx, tl, tl.tees)
 
 	tl.mu.Lock()
@@ -383,7 +383,7 @@ func (tl *testingLane) DeriveWithDeadline(deadline time.Time) (Lane, context.Can
 }
 
 func (tl *testingLane) DeriveWithTimeout(duration time.Duration) (Lane, context.CancelFunc) {
-	childCtx, cancelFn := context.WithTimeout(context.WithValue(tl.Context, parent_lane_id, tl.LaneId()), duration)
+	childCtx, cancelFn := context.WithTimeout(context.WithValue(tl.Context, ParentLaneIdKey, tl.LaneId()), duration)
 	l := deriveTestingLane(childCtx, tl, tl.tees)
 
 	tl.mu.Lock()
