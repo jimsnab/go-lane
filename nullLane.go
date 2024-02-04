@@ -21,6 +21,7 @@ type (
 		mu         sync.Mutex
 		tees       []Lane
 		onPanic    Panic
+		journeyId  string
 	}
 
 	wrappedNullWriter struct {
@@ -49,6 +50,9 @@ func deriveNullLane(ctx context.Context, tees []Lane, onPanic Panic) Lane {
 }
 
 func (nl *nullLane) SetJourneyId(id string) {
+	nl.mu.Lock()
+	defer nl.mu.Unlock()
+	nl.journeyId = id
 	// null lane does not format a log message, so the correlation ID is ignored
 }
 
@@ -147,6 +151,12 @@ func (nl *nullLane) EnableStackTrace(level LaneLogLevel, enable bool) bool {
 
 func (nl *nullLane) LaneId() string {
 	return nl.Value(null_lane_id).(string)
+}
+
+func (nl *nullLane) JourneyId() string {
+	nl.mu.Lock()
+	defer nl.mu.Unlock()
+	return nl.journeyId
 }
 
 func (nl *nullLane) AddTee(l Lane) {

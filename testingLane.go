@@ -31,6 +31,7 @@ type (
 		parent               *testingLane
 		wantDescendantEvents bool
 		onPanic              Panic
+		journeyId            string
 	}
 
 	testingLaneId string
@@ -95,6 +96,9 @@ func deriveTestingLane(ctx context.Context, parent *testingLane, tees []Lane) Te
 }
 
 func (tl *testingLane) SetJourneyId(id string) {
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+	tl.journeyId = id
 	// testing lane does not format a log message, so the correlation ID is ignored
 }
 
@@ -413,6 +417,12 @@ func (tl *testingLane) EnableStackTrace(level LaneLogLevel, enable bool) bool {
 
 func (tl *testingLane) LaneId() string {
 	return tl.Value(testing_lane_id).(string)
+}
+
+func (tl *testingLane) JourneyId() string {
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+	return tl.journeyId
 }
 
 func (tl *testingLane) AddTee(l Lane) {

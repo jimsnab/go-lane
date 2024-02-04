@@ -440,6 +440,12 @@ func (ll *logLane) LaneId() string {
 	return ll.Value(LogLaneIdKey).(string)
 }
 
+func (ll *logLane) JourneyId() string {
+	ll.mu.Lock()
+	defer ll.mu.Unlock()
+	return ll.journeyId
+}
+
 func (ll *logLane) EnableStackTrace(level LaneLogLevel, enable bool) bool {
 	return ll.stackTrace[level].Swap(enable)
 }
