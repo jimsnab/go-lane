@@ -9,42 +9,48 @@ import (
 
 type (
 	diskLane struct {
-		logLane
+		LogLane
 		f *os.File
 	}
 )
 
 func NewDiskLane(ctx context.Context, logFile string) (l Lane, err error) {
-	ll := deriveLogLane(nil, ctx, []Lane{}, "")
 
-	f, err := os.OpenFile(logFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
+	createFn := func(parentLane Lane) (newLane Lane, ll LogLane, writer *log.Logger, err error) {
+		newLane, ll, writer, err = createDiskLane(logFile, parentLane)
 		return
 	}
 
-	dl := diskLane{
-		f: f,
-	}
-	ll.clone(&dl.logLane)
-
-	dl.logLane.writer = log.New(f, "", 0)
-	l = &dl
-	return
+	return NewEmbeddedLogLane(createFn, ctx)
 }
 
-func (dl *diskLane) Derive() Lane {
-	ll := deriveLogLane(&dl.logLane, context.WithValue(dl.Context, parent_lane_id, dl.LaneId()), dl.tees, dl.cr)
+func createDiskLane(logFile string, parentLane Lane) (newLane Lane, ll LogLane, writer *log.Logger, err error) {
+	dl := diskLane{}
+	pdl, _ := parentLane.(*diskLane)
 
-	newFd, err := syscall.Dup(int(dl.f.Fd()))
-	if err != nil {
-		panic(err)
+	if pdl == nil {
+		var f *os.File
+		f, err = os.OpenFile(logFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		if err != nil {
+			return
+		}
+
+		dl.f = f
+	} else {
+		var newFd int
+		newFd, err = syscall.Dup(int(pdl.f.Fd()))
+		if err != nil {
+			return
+		}
+		f2 := os.NewFile(uintptr(newFd), dl.f.Name())
+		dl.f = f2
 	}
-	f2 := os.NewFile(uintptr(newFd), dl.f.Name())
+	writer = log.New(dl.f, "", 0)
 
-	dl2 := diskLane{f: f2}
-	ll.clone(&dl2.logLane)
-	dl2.logLane.writer = log.New(f2, "", 0)
-	return &dl2
+	ll = AllocEmbeddedLogLane()
+	dl.LogLane = ll
+	newLane = &dl
+	return
 }
 
 func (dl *diskLane) Close() {
