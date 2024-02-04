@@ -19,6 +19,7 @@ type (
 	LogLane interface {
 		Lane
 		AddCR(shouldAdd bool) (prior bool)
+		SetFlagsMask(mask int) (prior int)
 	}
 
 	logLane struct {
@@ -477,8 +478,13 @@ func (ll *logLane) SetPanicHandler(handler Panic) {
 	ll.onPanic = handler
 }
 
-func (ll *logLane) setFlagsMask(mask int) {
+func (ll *logLane) SetFlagsMask(mask int) (prior int) {
+	ll.mu.Lock()
+	defer ll.mu.Unlock()
+
+	prior = ll.logMask
 	ll.logMask = mask
+	return
 }
 
 func (wlw *wrappedLogWriter) Write(p []byte) (n int, err error) {
