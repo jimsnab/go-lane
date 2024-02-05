@@ -157,7 +157,8 @@ func (tl *testingLane) FindEvents(eventList []*LaneEvent) bool {
 }
 
 // eventText specifies a list of events, separated by \n, and each
-// line must be in the form of <level>\t<message>.
+// line must be in the form of <level>\t<message>. Actual \n or \t
+// can be specified by "\\n" or "\\t"
 func (tl *testingLane) VerifyEventText(eventText string) (match bool) {
 	eventList := []*LaneEvent{}
 
@@ -168,7 +169,10 @@ func (tl *testingLane) VerifyEventText(eventText string) (match bool) {
 			if len(parts) != 2 {
 				panic("eventText line must have exactly one tab separator")
 			}
-			eventList = append(eventList, &LaneEvent{Level: parts[0], Message: parts[1]})
+			text := parts[1]
+			text = strings.ReplaceAll(text, "\\t", "\t")
+			text = strings.ReplaceAll(text, "\\n", "\n")
+			eventList = append(eventList, &LaneEvent{Level: parts[0], Message: text})
 		}
 	}
 
