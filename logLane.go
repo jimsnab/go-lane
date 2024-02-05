@@ -126,6 +126,7 @@ func deriveLogLane(parent *logLane, startingCtx context.Context, contextCallback
 func (ll *logLane) initialize(laneOuter Lane, pll *logLane, startingCtx context.Context, contextCallback deriveContext, onCreate OnCreateLane, writer *log.Logger) {
 	ll.stackTrace = make([]atomic.Bool, int(LogLevelFatal+1))
 	ll.onCreateLane = onCreate // keep this reference so that future Derive() calls can invoke it
+	ll.outer = laneOuter
 	ll.SetPanicHandler(nil)
 
 	// make a logging instance that ultimately does logging via the lane

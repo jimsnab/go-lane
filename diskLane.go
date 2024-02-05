@@ -42,7 +42,7 @@ func createDiskLane(logFile string, parentLane Lane) (newLane Lane, ll LogLane, 
 		if err != nil {
 			return
 		}
-		f2 := os.NewFile(uintptr(newFd), dl.f.Name())
+		f2 := os.NewFile(uintptr(newFd), pdl.f.Name())
 		dl.f = f2
 	}
 	writer = log.New(dl.f, "", 0)
