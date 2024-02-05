@@ -39,7 +39,8 @@ type (
 	}
 
 	wrappedLogWriter struct {
-		ll *logLane
+		outer Lane
+		ll    *logLane
 	}
 
 	LaneIdKey string
@@ -130,7 +131,7 @@ func (ll *logLane) initialize(laneOuter Lane, pll *logLane, startingCtx context.
 	ll.SetPanicHandler(nil)
 
 	// make a logging instance that ultimately does logging via the lane
-	wlw := wrappedLogWriter{ll: ll}
+	wlw := wrappedLogWriter{outer: laneOuter, ll: ll}
 	if writer == nil {
 		ll.writer = log.Default()
 	} else {
@@ -515,7 +516,7 @@ func (wlw *wrappedLogWriter) Write(p []byte) (n int, err error) {
 			cuts--
 		}
 	}
-	wlw.ll.Info(text)
+	wlw.outer.Info(text)
 
 	return len(p), nil
 }
