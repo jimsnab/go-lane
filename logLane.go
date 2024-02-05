@@ -42,8 +42,6 @@ type (
 		ll *logLane
 	}
 
-	laneId string
-
 	// Callback for creating a new derived context. If the context returned by
 	// the callback is not derived from newCtx, the returned context must
 	// contain the context value key laneIdKey with value id.
@@ -57,10 +55,10 @@ type (
 )
 
 // Context key for the lane ID
-const LogLaneIdKey = laneId("log_lane_id")
+const LogLaneIdKey = "log_lane_id"
 
 // Context key for the parent lane ID
-const ParentLaneIdKey = laneId("parent_lane_id")
+const ParentLaneIdKey = "parent_lane_id"
 
 func isLogCrLf() bool {
 	var buf bytes.Buffer
