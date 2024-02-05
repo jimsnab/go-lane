@@ -106,7 +106,7 @@ func AllocEmbeddedLogLane() LogLane {
 }
 
 // Convenience wrapper that makes a new logLane object and calls initialize() on it
-func deriveLogLane(parent *logLane, startingCtx context.Context, contextCallback deriveContext, createLane OnCreateLane) (ll *logLane, err error) {
+func deriveLogLane(parent *logLane, startingCtx context.Context, contextCallback deriveContext, createLane OnCreateLane) (l Lane, err error) {
 	var parentOuter Lane
 	if parent != nil {
 		parentOuter = parent.outer
@@ -115,8 +115,10 @@ func deriveLogLane(parent *logLane, startingCtx context.Context, contextCallback
 	if err != nil {
 		return
 	}
-	ll = child.(*logLane)
-	ll.initialize(childOuter, parent, startingCtx, contextCallback, createLane, writer)
+	derived := child.(*logLane)
+	derived.initialize(childOuter, parent, startingCtx, contextCallback, createLane, writer)
+
+	l = childOuter
 	return
 }
 
@@ -186,13 +188,11 @@ func (ll *logLane) AddCR(shouldAdd bool) (prior bool) {
 
 // For cases where \r\n line endings are required (ex: vscode terminal)
 func NewLogLaneWithCR(ctx context.Context) Lane {
-	cr := ""
-	if !isLogCrLf() {
-		cr = "\r"
-	}
-
 	ll, _ := deriveLogLane(nil, ctx, nil, createLogLane)
-	ll.cr = cr
+	if !isLogCrLf() {
+		p := ll.(LogLane)
+		p.AddCR(true)
+	}
 	return ll
 }
 
