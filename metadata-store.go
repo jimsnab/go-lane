@@ -3,6 +3,13 @@ package lane
 import "sync"
 
 type (
+	LaneMetadata interface {
+		SetOwner(l Lane)
+		SetMetadata(key, value string)
+		GetMetadata(key string) string
+		MetadataMap() map[string]string
+	}
+
 	// Common implementation of metadata
 	MetadataStore struct {
 		mu       sync.Mutex
@@ -41,7 +48,7 @@ func (ms *MetadataStore) GetMetadata(key string) string {
 }
 
 // Returns a copy of the metadata map
-func (ms *MetadataStore) Map() map[string]string {
+func (ms *MetadataStore) MetadataMap() map[string]string {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 

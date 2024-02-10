@@ -86,6 +86,17 @@ func TestLane(t *testing.T) {
 	if tl.GetMetadata("key") != "stored" {
 		t.Error("test lane must provide access to metadata")
 	}
+
+	// getting metadata store makes a copy
+	lm := l.(LaneMetadata)
+	meta := lm.MetadataMap()
+	l.SetMetadata("key", "replaced")
+	if meta["key"] != "stored" {
+		t.Error("expected a copy")
+	}
+	if l.GetMetadata("key") != "replaced" {
+		t.Error("expected a replacement value")
+	}
 }
 
 func TestLaneSetLevel(t *testing.T) {
