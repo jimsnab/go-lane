@@ -71,6 +71,10 @@ func (nl *nullLane) tee(logger func(l Lane)) {
 	}
 }
 
+func (nl *nullLane) Metadata() LaneMetadata {
+	return nullMetadata
+}
+
 func (nl *nullLane) Trace(args ...any) { nl.tee(func(l Lane) { l.Trace(args...) }) }
 func (nl *nullLane) Tracef(format string, args ...any) {
 	nl.tee(func(l Lane) { l.Tracef(format, args...) })

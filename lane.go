@@ -42,6 +42,11 @@ type (
 		// Controls the log filtering
 		SetLogLevel(newLevel LaneLogLevel) (priorLevel LaneLogLevel)
 
+		// Returns a LaneMetadata interface to set the metadata values of the lane. If a lane
+		// type does not support metadata, a no-op stub will be returned, so that the
+		// caller can set metadata irrespective of the lane type.
+		Metadata() LaneMetadata
+
 		// Trace, intended for checkpoint information. Messages formated with fmt.Sprint().
 		Trace(args ...any)
 		// Trace, intended for checkpoint information. Messages formated with fmt.Sprintf().

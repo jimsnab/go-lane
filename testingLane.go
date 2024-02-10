@@ -32,6 +32,7 @@ type (
 		wantDescendantEvents bool
 		onPanic              Panic
 		journeyId            string
+		metadata             map[string]string
 	}
 
 	testingLaneId string
@@ -66,6 +67,9 @@ type (
 
 		// Controls whether to capture child lane activity (wanted=true) or not.
 		WantDescendantEvents(wanted bool) (prior bool)
+
+		// Retrieves metadata
+		GetMetadata(key string) string
 	}
 )
 
@@ -268,6 +272,27 @@ func (tl *testingLane) tee(logger func(l Lane)) {
 	for _, t := range tl.tees {
 		logger(t)
 	}
+}
+
+func (tl *testingLane) Metadata() LaneMetadata {
+	return tl
+}
+
+func (tl *testingLane) SetMetadata(key, value string) {
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+
+	if tl.metadata == nil {
+		tl.metadata = map[string]string{}
+	}
+	tl.metadata[key] = value
+}
+
+func (tl *testingLane) GetMetadata(key string) string {
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+
+	return tl.metadata[key]
 }
 
 func (tl *testingLane) Trace(args ...any) {

@@ -73,6 +73,19 @@ func TestLane(t *testing.T) {
 	if ctx.Value(kTestStr) != string("pass") {
 		t.Errorf("Context is not working")
 	}
+
+	// unset metadata
+	if tl.GetMetadata("key") != "" {
+		t.Error("test lane must provide empty value when metadata is not set")
+	}
+
+	// setting metadata via the generic interface is visible in a testing lane
+	l := Lane(tl)
+	l.Metadata().SetMetadata("key", "stored")
+
+	if tl.GetMetadata("key") != "stored" {
+		t.Error("test lane must provide access to metadata")
+	}
 }
 
 func TestLaneSetLevel(t *testing.T) {
@@ -732,6 +745,10 @@ func TestLogLane(t *testing.T) {
 	if ctx.Value(kTestStr).(string) != "pass" {
 		t.Errorf("Context is not working")
 	}
+
+	// setting metadata is harmless
+	l := Lane(ll)
+	l.Metadata().SetMetadata("key", "ignored")
 }
 
 func TestLogLaneJourneyId(t *testing.T) {
@@ -1462,6 +1479,10 @@ func TestNullLane(t *testing.T) {
 	if buf.Len() != 0 {
 		t.Errorf("unexpected data in logger output")
 	}
+
+	// setting metadata is harmless
+	l := Lane(nl)
+	l.Metadata().SetMetadata("key", "ignored")
 }
 
 func TestNullLaneSetLevel(t *testing.T) {

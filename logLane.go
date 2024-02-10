@@ -251,6 +251,10 @@ func (ll *logLane) tee(logger func(l Lane)) {
 	}
 }
 
+func (ll *logLane) Metadata() LaneMetadata {
+	return nullMetadata
+}
+
 func (ll *logLane) Trace(args ...any) {
 	if ll.shouldLog(LogLevelTrace) {
 		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("TRACE"), sprint(args...), ll.cr)
