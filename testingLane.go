@@ -286,6 +286,10 @@ func (tl *testingLane) SetMetadata(key, value string) {
 		tl.metadata = map[string]string{}
 	}
 	tl.metadata[key] = value
+
+	for _, tee := range tl.tees {
+		tee.Metadata().SetMetadata(key, value)
+	}
 }
 
 func (tl *testingLane) GetMetadata(key string) string {
@@ -469,6 +473,14 @@ func (tl *testingLane) RemoveTee(l Lane) {
 		}
 	}
 	tl.mu.Unlock()
+}
+
+func (tl *testingLane) Tees() []Lane {
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+	tees := make([]Lane, len(tl.tees))
+	copy(tees, tl.tees)
+	return tees
 }
 
 func (tl *testingLane) SetPanicHandler(handler Panic) {

@@ -110,6 +110,9 @@ type (
 		// Disconnects the other lane from the tee.
 		RemoveTee(l Lane)
 
+		// Provides the current tee list
+		Tees() []Lane
+
 		// Intercepts Panic, allowing the test to prevent the executable from crashing, and validate
 		// an injected fatal error. Use this with care, and be sure to call runtime.Goexit() so that
 		// the test version of Panic doesn't return.

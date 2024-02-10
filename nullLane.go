@@ -72,7 +72,7 @@ func (nl *nullLane) tee(logger func(l Lane)) {
 }
 
 func (nl *nullLane) Metadata() LaneMetadata {
-	return nullMetadata
+	return newStubMetadata(nl)
 }
 
 func (nl *nullLane) Trace(args ...any) { nl.tee(func(l Lane) { l.Trace(args...) }) }
@@ -178,6 +178,14 @@ func (nl *nullLane) RemoveTee(l Lane) {
 		}
 	}
 	nl.mu.Unlock()
+}
+
+func (nl *nullLane) Tees() []Lane {
+	nl.mu.Lock()
+	defer nl.mu.Unlock()
+	tees := make([]Lane, len(nl.tees))
+	copy(tees, nl.tees)
+	return tees
 }
 
 func (nl *nullLane) SetPanicHandler(handler Panic) {

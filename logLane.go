@@ -252,7 +252,7 @@ func (ll *logLane) tee(logger func(l Lane)) {
 }
 
 func (ll *logLane) Metadata() LaneMetadata {
-	return nullMetadata
+	return newStubMetadata(ll)
 }
 
 func (ll *logLane) Trace(args ...any) {
@@ -472,6 +472,14 @@ func (ll *logLane) RemoveTee(l Lane) {
 		}
 	}
 	ll.mu.Unlock()
+}
+
+func (ll *logLane) Tees() []Lane {
+	ll.mu.Lock()
+	defer ll.mu.Unlock()
+	tees := make([]Lane, len(ll.tees))
+	copy(tees, ll.tees)
+	return tees
 }
 
 func (ll *logLane) SetPanicHandler(handler Panic) {

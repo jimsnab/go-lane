@@ -47,6 +47,16 @@ func TestTeeLog(t *testing.T) {
 	if !tl.VerifyEvents(events) {
 		t.Errorf("Test events don't match")
 	}
+
+	if tl.GetMetadata("test") != "" {
+		t.Fatal("metadata unexpected")
+	}
+
+	ll.Metadata().SetMetadata("test", "1")
+
+	if tl.GetMetadata("test") != "1" {
+		t.Fatal("metadata expected")
+	}
 }
 
 func TestTeeLogDerive(t *testing.T) {
@@ -195,6 +205,16 @@ func TestTeeNull(t *testing.T) {
 
 	if !tl.VerifyEvents(events) {
 		t.Errorf("Test events don't match")
+	}
+
+	if tl.GetMetadata("test") != "" {
+		t.Fatal("metadata unexpected")
+	}
+
+	nl.Metadata().SetMetadata("test", "1")
+
+	if tl.GetMetadata("test") != "1" {
+		t.Fatal("metadata expected")
 	}
 }
 
@@ -584,6 +604,16 @@ func TestTeeTestDerive4(t *testing.T) {
 	if !tlv.VerifyEvents(events) {
 		t.Errorf("Test events don't match")
 	}
+
+	if tlv.GetMetadata("test") != "" {
+		t.Fatal("metadata unexpected")
+	}
+
+	tl.Metadata().SetMetadata("test", "1")
+
+	if tlv.GetMetadata("test") != "1" {
+		t.Fatal("metadata expected")
+	}
 }
 
 func TestTeeTestDouble(t *testing.T) {
@@ -638,5 +668,39 @@ func TestTeeTestDouble(t *testing.T) {
 	}
 	if !tl2.VerifyEvents(events[:12]) {
 		t.Errorf("Test events don't match")
+	}
+}
+
+func TestTestingLaneMetadata(t *testing.T) {
+	tl1 := NewTestingLane(context.Background())
+
+	tl2 := NewTestingLane(context.Background())
+	tl1.AddTee(tl2)
+
+	if tl1.GetMetadata("test") != "" {
+		t.Fatal("unexpected existing metadata")
+	}
+
+	if tl2.GetMetadata("test") != "" {
+		t.Fatal("unexpected existing metadata")
+	}
+
+	tl1.Metadata().SetMetadata("main", "tee")
+	if tl1.GetMetadata("main") != "tee" {
+		t.Fatal("expected main testing lane metadata")
+	}
+	if tl2.GetMetadata("main") != "tee" {
+		t.Fatal("expected teed testing lane metadata")
+	}
+
+	tl2.Metadata().SetMetadata("teed", "tee")
+	if tl1.GetMetadata("main") != "tee" {
+		t.Fatal("expected main testing lane metadata")
+	}
+	if tl1.GetMetadata("teed") != "" {
+		t.Fatal("didn't expect teed lane metadata in main lane")
+	}
+	if tl2.GetMetadata("teed") != "tee" {
+		t.Fatal("expected teed testing lane metadata")
 	}
 }
