@@ -18,10 +18,6 @@ const (
 type (
 	LaneLogLevel int
 
-	LaneMetadata interface {
-		SetMetadata(key, val string)
-	}
-
 	Lane interface {
 		context.Context
 
@@ -42,10 +38,11 @@ type (
 		// Controls the log filtering
 		SetLogLevel(newLevel LaneLogLevel) (priorLevel LaneLogLevel)
 
-		// Returns a LaneMetadata interface to set the metadata values of the lane. If a lane
-		// type does not support metadata, a no-op stub will be returned, so that the
-		// caller can set metadata irrespective of the lane type.
-		Metadata() LaneMetadata
+		// Sets a lane metadata value (even if the lane type does not log it)
+		SetMetadata(key, val string)
+
+		// Gets a lane metadata value (even if the lane type does not log it)
+		GetMetadata(key string) string
 
 		// Trace, intended for checkpoint information. Messages formated with fmt.Sprint().
 		Trace(args ...any)

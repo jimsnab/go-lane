@@ -15,6 +15,7 @@ const null_lane_id = nullContext("null_lane_id")
 type (
 	nullLane struct {
 		context.Context
+		MetadataStore
 		wlog       *log.Logger
 		level      int32
 		stackTrace []atomic.Bool
@@ -41,6 +42,7 @@ func deriveNullLane(ctx context.Context, tees []Lane, onPanic Panic) Lane {
 		tees:       tees,
 	}
 	nl.SetPanicHandler(onPanic)
+	nl.SetOwner(&nl)
 
 	wnw := wrappedNullWriter{nl: &nl}
 	nl.wlog = log.New(&wnw, "", 0)
@@ -69,10 +71,6 @@ func (nl *nullLane) tee(logger func(l Lane)) {
 	for _, t := range nl.tees {
 		logger(t)
 	}
-}
-
-func (nl *nullLane) Metadata() LaneMetadata {
-	return newStubMetadata(nl)
 }
 
 func (nl *nullLane) Trace(args ...any) { nl.tee(func(l Lane) { l.Trace(args...) }) }

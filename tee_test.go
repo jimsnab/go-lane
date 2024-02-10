@@ -52,7 +52,7 @@ func TestTeeLog(t *testing.T) {
 		t.Fatal("metadata unexpected")
 	}
 
-	ll.Metadata().SetMetadata("test", "1")
+	ll.SetMetadata("test", "1")
 
 	if tl.GetMetadata("test") != "1" {
 		t.Fatal("metadata expected")
@@ -211,7 +211,7 @@ func TestTeeNull(t *testing.T) {
 		t.Fatal("metadata unexpected")
 	}
 
-	nl.Metadata().SetMetadata("test", "1")
+	nl.SetMetadata("test", "1")
 
 	if tl.GetMetadata("test") != "1" {
 		t.Fatal("metadata expected")
@@ -609,7 +609,7 @@ func TestTeeTestDerive4(t *testing.T) {
 		t.Fatal("metadata unexpected")
 	}
 
-	tl.Metadata().SetMetadata("test", "1")
+	tl.SetMetadata("test", "1")
 
 	if tlv.GetMetadata("test") != "1" {
 		t.Fatal("metadata expected")
@@ -685,7 +685,7 @@ func TestTestingLaneMetadata(t *testing.T) {
 		t.Fatal("unexpected existing metadata")
 	}
 
-	tl1.Metadata().SetMetadata("main", "tee")
+	tl1.SetMetadata("main", "tee")
 	if tl1.GetMetadata("main") != "tee" {
 		t.Fatal("expected main testing lane metadata")
 	}
@@ -693,7 +693,7 @@ func TestTestingLaneMetadata(t *testing.T) {
 		t.Fatal("expected teed testing lane metadata")
 	}
 
-	tl2.Metadata().SetMetadata("teed", "tee")
+	tl2.SetMetadata("teed", "tee")
 	if tl1.GetMetadata("main") != "tee" {
 		t.Fatal("expected main testing lane metadata")
 	}

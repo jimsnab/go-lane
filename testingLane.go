@@ -23,6 +23,7 @@ type (
 	testingLane struct {
 		mu sync.Mutex
 		context.Context
+		MetadataStore
 		Events               []*LaneEvent
 		tlog                 *log.Logger
 		level                LaneLogLevel
@@ -32,7 +33,6 @@ type (
 		wantDescendantEvents bool
 		onPanic              Panic
 		journeyId            string
-		metadata             map[string]string
 	}
 
 	testingLaneId string
@@ -86,6 +86,7 @@ func deriveTestingLane(ctx context.Context, parent *testingLane, tees []Lane) Te
 		tees:       tees,
 	}
 	tl.SetPanicHandler(nil)
+	tl.SetOwner(&tl)
 
 	// make a logging instance that ultimately does logging via the lane
 	tlw := testingLogWriter{tl: &tl}
@@ -272,31 +273,6 @@ func (tl *testingLane) tee(logger func(l Lane)) {
 	for _, t := range tl.tees {
 		logger(t)
 	}
-}
-
-func (tl *testingLane) Metadata() LaneMetadata {
-	return tl
-}
-
-func (tl *testingLane) SetMetadata(key, value string) {
-	tl.mu.Lock()
-	defer tl.mu.Unlock()
-
-	if tl.metadata == nil {
-		tl.metadata = map[string]string{}
-	}
-	tl.metadata[key] = value
-
-	for _, tee := range tl.tees {
-		tee.Metadata().SetMetadata(key, value)
-	}
-}
-
-func (tl *testingLane) GetMetadata(key string) string {
-	tl.mu.Lock()
-	defer tl.mu.Unlock()
-
-	return tl.metadata[key]
 }
 
 func (tl *testingLane) Trace(args ...any) {

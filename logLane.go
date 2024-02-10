@@ -24,6 +24,7 @@ type (
 
 	logLane struct {
 		context.Context
+		MetadataStore
 		wlog         *log.Logger // wrapper log to capture caller's logging intent without sending to output
 		writer       *log.Logger // the log instance used for output
 		level        int32
@@ -95,6 +96,7 @@ func NewEmbeddedLogLane(onCreate OnCreateLane, startingCtx context.Context) (l L
 // Worker that makes an uninitialized log lane
 func createLogLane(parentLane Lane) (newLane Lane, ll LogLane, writer *log.Logger, err error) {
 	llZero := logLane{}
+	llZero.SetOwner(&llZero)
 	newLane = &llZero
 	ll = &llZero
 	return
@@ -103,6 +105,7 @@ func createLogLane(parentLane Lane) (newLane Lane, ll LogLane, writer *log.Logge
 // Function to allocate a log lane for lane types that embed a log lane
 func AllocEmbeddedLogLane() LogLane {
 	llZero := logLane{}
+	llZero.SetOwner(&llZero)
 	return &llZero
 }
 
@@ -249,10 +252,6 @@ func (ll *logLane) tee(logger func(l Lane)) {
 	for _, t := range ll.tees {
 		logger(t)
 	}
-}
-
-func (ll *logLane) Metadata() LaneMetadata {
-	return newStubMetadata(ll)
 }
 
 func (ll *logLane) Trace(args ...any) {

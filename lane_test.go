@@ -81,7 +81,7 @@ func TestLane(t *testing.T) {
 
 	// setting metadata via the generic interface is visible in a testing lane
 	l := Lane(tl)
-	l.Metadata().SetMetadata("key", "stored")
+	l.SetMetadata("key", "stored")
 
 	if tl.GetMetadata("key") != "stored" {
 		t.Error("test lane must provide access to metadata")
@@ -748,7 +748,7 @@ func TestLogLane(t *testing.T) {
 
 	// setting metadata is harmless
 	l := Lane(ll)
-	l.Metadata().SetMetadata("key", "ignored")
+	l.SetMetadata("key", "ignored")
 }
 
 func TestLogLaneJourneyId(t *testing.T) {
@@ -1482,7 +1482,7 @@ func TestNullLane(t *testing.T) {
 
 	// setting metadata is harmless
 	l := Lane(nl)
-	l.Metadata().SetMetadata("key", "ignored")
+	l.SetMetadata("key", "ignored")
 }
 
 func TestNullLaneSetLevel(t *testing.T) {
