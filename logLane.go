@@ -20,6 +20,7 @@ type (
 		Lane
 		AddCR(shouldAdd bool) (prior bool)
 		SetFlagsMask(mask int) (prior int)
+		LogStack()
 	}
 
 	logLane struct {
@@ -254,100 +255,84 @@ func (ll *logLane) tee(logger func(l Lane)) {
 	}
 }
 
-func (ll *logLane) Trace(args ...any) {
-	if ll.shouldLog(LogLevelTrace) {
-		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("TRACE"), sprint(args...), ll.cr)
-		ll.logStack(LogLevelTrace)
+func (ll *logLane) printMsg(level LaneLogLevel, prefix string, teeFn func(l Lane), args ...any) {
+	if ll.shouldLog(level) {
+		msg := fmt.Sprintf("%s %s", ll.getMesagePrefix(prefix), sprint(args...))
+		if ll.cr != "" {
+			msg = strings.ReplaceAll(msg, "\r\n", "\n")
+			msg = strings.ReplaceAll(msg, "\n", ll.cr+"\n")
+			if !strings.Contains(msg, ll.cr) {
+				msg += ll.cr
+			}
+		}
+		ll.writer.Print(msg)
+		ll.logStackIf(level)
 	}
-	ll.tee(func(l Lane) { l.Trace(args...) })
+	ll.tee(teeFn)
+}
+
+func (ll *logLane) printfMsg(level LaneLogLevel, prefix string, teeFn func(l Lane), formatStr string, args ...any) {
+	if ll.shouldLog(level) {
+		msg := fmt.Sprintf("%s %s", ll.getMesagePrefix(prefix), fmt.Sprintf(formatStr, args...))
+		if ll.cr != "" {
+			msg = strings.ReplaceAll(msg, "\r\n", "\n")
+			msg = strings.ReplaceAll(msg, "\n", ll.cr+"\n")
+			if !strings.Contains(msg, ll.cr) {
+				msg += ll.cr
+			}
+		}
+		ll.writer.Print(msg)
+		ll.logStackIf(level)
+	}
+	ll.tee(teeFn)
+}
+
+func (ll *logLane) Trace(args ...any) {
+	ll.printMsg(LogLevelTrace, "TRACE", func(l Lane) { l.Trace(args...) }, args...)
 }
 
 func (ll *logLane) Tracef(format string, args ...any) {
-	if ll.shouldLog(LogLevelTrace) {
-		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("TRACE"), fmt.Sprintf(format, args...), ll.cr)
-		ll.logStack(LogLevelTrace)
-	}
-	ll.tee(func(l Lane) { l.Tracef(format, args...) })
+	ll.printfMsg(LogLevelTrace, "TRACE", func(l Lane) { l.Tracef(format, args...) }, format, args...)
 }
 
 func (ll *logLane) Debug(args ...any) {
-	if ll.shouldLog(LogLevelDebug) {
-		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("DEBUG"), sprint(args...), ll.cr)
-		ll.logStack(LogLevelDebug)
-	}
-	ll.tee(func(l Lane) { l.Debug(args...) })
+	ll.printMsg(LogLevelDebug, "DEBUG", func(l Lane) { l.Debug(args...) }, args...)
 }
 
 func (ll *logLane) Debugf(format string, args ...any) {
-	if ll.shouldLog(LogLevelDebug) {
-		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("DEBUG"), fmt.Sprintf(format, args...), ll.cr)
-		ll.logStack(LogLevelDebug)
-	}
-	ll.tee(func(l Lane) { l.Debugf(format, args...) })
+	ll.printfMsg(LogLevelDebug, "DEBUG", func(l Lane) { l.Debugf(format, args...) }, format, args...)
 }
 
 func (ll *logLane) Info(args ...any) {
-	if ll.shouldLog(LogLevelInfo) {
-		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("INFO"), sprint(args...), ll.cr)
-		ll.logStack(LogLevelInfo)
-	}
-	ll.tee(func(l Lane) { l.Info(args...) })
+	ll.printMsg(LogLevelInfo, "INFO", func(l Lane) { l.Info(args...) }, args...)
 }
 
 func (ll *logLane) Infof(format string, args ...any) {
-	if ll.shouldLog(LogLevelInfo) {
-		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("INFO"), fmt.Sprintf(format, args...), ll.cr)
-		ll.logStack(LogLevelInfo)
-	}
-	ll.tee(func(l Lane) { l.Infof(format, args...) })
+	ll.printfMsg(LogLevelInfo, "INFO", func(l Lane) { l.Infof(format, args...) }, format, args...)
 }
 
 func (ll *logLane) Warn(args ...any) {
-	if ll.shouldLog(LogLevelWarn) {
-		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("WARN"), sprint(args...), ll.cr)
-		ll.logStack(LogLevelWarn)
-	}
-	ll.tee(func(l Lane) { l.Warn(args...) })
+	ll.printMsg(LogLevelWarn, "WARN", func(l Lane) { l.Warn(args...) }, args...)
 }
 
 func (ll *logLane) Warnf(format string, args ...any) {
-	if ll.shouldLog(LogLevelWarn) {
-		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("WARN"), fmt.Sprintf(format, args...), ll.cr)
-		ll.logStack(LogLevelWarn)
-	}
-	ll.tee(func(l Lane) { l.Warnf(format, args...) })
+	ll.printfMsg(LogLevelWarn, "WARN", func(l Lane) { l.Warnf(format, args...) }, format, args...)
 }
 
 func (ll *logLane) Error(args ...any) {
-	if ll.shouldLog(LogLevelError) {
-		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("ERROR"), sprint(args...), ll.cr)
-		ll.logStack(LogLevelError)
-	}
-	ll.tee(func(l Lane) { l.Error(args...) })
+	ll.printMsg(LogLevelError, "ERROR", func(l Lane) { l.Error(args...) }, args...)
 }
 
 func (ll *logLane) Errorf(format string, args ...any) {
-	if ll.shouldLog(LogLevelError) {
-		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("ERROR"), fmt.Sprintf(format, args...), ll.cr)
-		ll.logStack(LogLevelError)
-	}
-	ll.tee(func(l Lane) { l.Errorf(format, args...) })
+	ll.printfMsg(LogLevelError, "ERROR", func(l Lane) { l.Errorf(format, args...) }, format, args...)
 }
 
 func (ll *logLane) PreFatal(args ...any) {
-	if ll.shouldLog(LogLevelFatal) {
-		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("FATAL"), sprint(args...), ll.cr)
-		ll.logStack(LogLevelFatal)
-	}
-	ll.tee(func(l Lane) { l.PreFatal(args...) })
+	ll.printMsg(LogLevelFatal, "FATAL", func(l Lane) { l.PreFatal(args...) }, args...)
 }
 
 func (ll *logLane) PreFatalf(format string, args ...any) {
-	if ll.shouldLog(LogLevelFatal) {
-		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("FATAL"), fmt.Sprintf(format, args...), ll.cr)
-		ll.logStack(LogLevelFatal)
-	}
-	ll.tee(func(l Lane) { l.PreFatalf(format, args...) })
+	ll.printfMsg(LogLevelFatal, "FATAL", func(l Lane) { l.PreFatalf(format, args...) }, format, args...)
 }
 
 func (ll *logLane) Fatal(args ...any) {
@@ -360,18 +345,26 @@ func (ll *logLane) Fatalf(format string, args ...any) {
 	ll.onPanic()
 }
 
-func (ll *logLane) logStack(level LaneLogLevel) {
+func (ll *logLane) logStackIf(level LaneLogLevel) {
 	if ll.stackTrace[level].Load() {
-		buf := make([]byte, 16384)
-		n := runtime.Stack(buf, false)
-		lines := strings.Split(strings.TrimSpace(string(buf[0:n])), "\n")
-
-		// skip five lines: the first line (goroutine label), plus the logStack() and logging API,
-		// each has two lines (the function name on one line, followed by source info on the next line)
-		for n := 5; n < len(lines); n++ {
-			ll.writer.Printf("%s %s%s", ll.getMesagePrefix("STACK"), lines[n], ll.cr)
-		}
+		// skip seven lines: the first line (goroutine label), plus the LogStack() and logging API
+		ll.logStack(9)
 	}
+}
+
+func (ll *logLane) logStack(skip int) {
+	buf := make([]byte, 16384)
+	n := runtime.Stack(buf, false)
+	lines := strings.Split(strings.TrimSpace(string(buf[0:n])), "\n")
+
+	// each has two lines (the function name on one line, followed by source info on the next line)
+	for n := skip; n < len(lines); n++ {
+		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("STACK"), lines[n], ll.cr)
+	}
+}
+
+func (ll *logLane) LogStack() {
+	ll.logStack(5)
 }
 
 func (ll *logLane) Logger() *log.Logger {

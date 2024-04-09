@@ -3,6 +3,7 @@ package lane
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"regexp"
@@ -664,6 +665,23 @@ func TestLaneWrappedLogger(t *testing.T) {
 	}
 }
 
+func TestLaneWrappedLogger2(t *testing.T) {
+	ll := NewLogLaneWithCR(context.Background())
+
+	ll.Logger().Printf("2024/04/09 11:37:37 this is a test\n")
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll.Logger().Printf("2024/04/09 11:37:37 this is a test\n")
+
+	capture := buf.String()
+	if !strings.HasSuffix(capture, "this is a test\r\n") {
+		t.Errorf("Not expected stdout text")
+	}
+}
+
 func TestLaneDerived(t *testing.T) {
 	ptl := NewTestingLane(context.Background())
 	tl := ptl.Derive().(TestingLane)
@@ -1121,6 +1139,26 @@ STACK {GUID} {ANY}`
 	verifyLogLaneEvents(t, ll, expected, buf)
 }
 
+func TestLogLaneLogStack(t *testing.T) {
+	l := NewLogLane(context.Background())
+	ll := l.(LogLane)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll.LogStack()
+
+	expected := `STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}`
+
+	verifyLogLaneEvents(t, ll, expected, buf)
+}
+
 func TestLogLaneVerifyText(t *testing.T) {
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
@@ -1190,6 +1228,8 @@ func TestLogLaneVerifyTextCrLf(t *testing.T) {
 	expected = strings.ReplaceAll(expected, "{GUID}", guid)
 
 	if !bytes.Equal(buf.Bytes(), []byte(expected)) {
+		fmt.Printf("str:      %#v\n", buf.String())
+		fmt.Printf("expected: %#v\n", expected)
 		t.Error("mismatch")
 	}
 }
@@ -1851,6 +1891,40 @@ func TestDiskLane(t *testing.T) {
 	text := string(bytes)
 	if !strings.Contains(text, "testing 123\n") || !strings.Contains(text, "testing 456\n") {
 		t.Errorf("incorrect contents of disk log file")
+	}
+
+	os.Remove("test.log")
+}
+
+func TestDiskLaneStack(t *testing.T) {
+	os.Remove("test.log")
+
+	dl, err := NewDiskLane(context.Background(), "test.log")
+	if err != nil {
+		t.Fatal("make test.log")
+	}
+	if dl == nil {
+		t.Fatal("nil disk lane")
+	}
+
+	ll := dl.(LogLane)
+	ll.LogStack()
+	dl.Close()
+
+	bytes, err := os.ReadFile("test.log")
+	if err != nil {
+		t.Fatalf("read test.log: %v", err)
+	}
+
+	text := string(bytes)
+	lines := strings.Split(text, "\n")
+	if len(lines) != 7 {
+		t.Fatalf("incorrect number of stack lines")
+	}
+	for _, line := range lines[:6] {
+		if !strings.Contains(line, "STACK ") {
+			t.Errorf("not a stack line: %#v", line)
+		}
 	}
 
 	os.Remove("test.log")
