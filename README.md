@@ -51,8 +51,12 @@ Lane interface {
 
 	Derive() Lane
 	DeriveWithCancel() (Lane, context.CancelFunc)
+	DeriveWithCancelCause() (Lane, context.CancelCauseFunc)
+	DeriveWithoutCancel() (Lane, context.CancelFunc)
 	DeriveWithDeadline(deadline time.Time) (Lane, context.CancelFunc)
+	DeriveWithDeadlineCause(deadline time.Time, cause error) (Lane, context.CancelFunc)
 	DeriveWithTimeout(duration time.Duration) (Lane, context.CancelFunc)
+	DeriveWithTimeoutCause(duration time.Duration, cause error) (Lane, context.CancelFunc)
 	DeriveReplaceContext(ctx context.Context) Lane
 
 	EnableStackTrace(level LaneLogLevel, enable bool) (wasEnabled bool)
@@ -102,13 +106,8 @@ occur during the test.
 - `NewNullLane` creates a lane that does not log but still has the context functionality.
   Logging is similar to `log.SetOutput(io.Discard)` - fatal errors still terminate the app.
 
-- `OpenSearchLane` is a type that implements the Lane interface for logging to OpenSearch. It contains methods for writing logs, flushing log buffers, and closing the lane.
-
-Normally the production code uses a log lane, and unit tests use a testing lane; a null
-lane is handy in unit tests to disable logging out of scope of the test.
-
-The code doing the logging or using the context should not care what kind of lane it
-is given to use.
+Check out other projects, such as [go-lane-gin](https://github.com/jimsnab/go-lane-gin) or
+[go-lane-opensearch](https://github.com/jimsnab/go-lane-opensearch) for additional lane types.
 
 # Stack Trace
 

@@ -384,6 +384,28 @@ func (tl *testingLane) DeriveWithCancel() (Lane, context.CancelFunc) {
 	return l, cancelFn
 }
 
+func (tl *testingLane) DeriveWithCancelCause() (Lane, context.CancelCauseFunc) {
+	childCtx, cancelFn := context.WithCancelCause(context.WithValue(tl.Context, ParentLaneIdKey, tl.LaneId()))
+	l := deriveTestingLane(childCtx, tl, tl.tees)
+
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+	l.SetLogLevel(tl.level)
+
+	return l, cancelFn
+}
+
+func (tl *testingLane) DeriveWithoutCancel() Lane {
+	childCtx := context.WithoutCancel(context.WithValue(tl.Context, ParentLaneIdKey, tl.LaneId()))
+	l := deriveTestingLane(childCtx, tl, tl.tees)
+
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+	l.SetLogLevel(tl.level)
+
+	return l
+}
+
 func (tl *testingLane) DeriveWithDeadline(deadline time.Time) (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithDeadline(context.WithValue(tl.Context, ParentLaneIdKey, tl.LaneId()), deadline)
 	l := deriveTestingLane(childCtx, tl, tl.tees)
@@ -395,8 +417,30 @@ func (tl *testingLane) DeriveWithDeadline(deadline time.Time) (Lane, context.Can
 	return l, cancelFn
 }
 
+func (tl *testingLane) DeriveWithDeadlineCause(deadline time.Time, cause error) (Lane, context.CancelFunc) {
+	childCtx, cancelFn := context.WithDeadlineCause(context.WithValue(tl.Context, ParentLaneIdKey, tl.LaneId()), deadline, cause)
+	l := deriveTestingLane(childCtx, tl, tl.tees)
+
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+	l.SetLogLevel(tl.level)
+
+	return l, cancelFn
+}
+
 func (tl *testingLane) DeriveWithTimeout(duration time.Duration) (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithTimeout(context.WithValue(tl.Context, ParentLaneIdKey, tl.LaneId()), duration)
+	l := deriveTestingLane(childCtx, tl, tl.tees)
+
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+	l.SetLogLevel(tl.level)
+
+	return l, cancelFn
+}
+
+func (tl *testingLane) DeriveWithTimeoutCause(duration time.Duration, cause error) (Lane, context.CancelFunc) {
+	childCtx, cancelFn := context.WithTimeoutCause(context.WithValue(tl.Context, ParentLaneIdKey, tl.LaneId()), duration, cause)
 	l := deriveTestingLane(childCtx, tl, tl.tees)
 
 	tl.mu.Lock()

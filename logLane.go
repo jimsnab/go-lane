@@ -396,6 +396,31 @@ func (ll *logLane) DeriveWithCancel() (Lane, context.CancelFunc) {
 	return l, cancelFn
 }
 
+func (ll *logLane) DeriveWithCancelCause() (Lane, context.CancelCauseFunc) {
+	var cancelFn context.CancelCauseFunc
+	makeContext := func(newCtx context.Context, id string) context.Context {
+		var childCtx context.Context
+		childCtx, cancelFn = context.WithCancelCause(newCtx)
+		return childCtx
+	}
+	l, err := deriveLogLane(ll, ll, makeContext, ll.onCreateLane)
+	if err != nil {
+		l.Fatal(err)
+	}
+	return l, cancelFn
+}
+
+func (ll *logLane) DeriveWithoutCancel() Lane {
+	makeContext := func(newCtx context.Context, id string) context.Context {
+		return context.WithoutCancel(newCtx)
+	}
+	l, err := deriveLogLane(ll, ll, makeContext, ll.onCreateLane)
+	if err != nil {
+		l.Fatal(err)
+	}
+	return l
+}
+
 func (ll *logLane) DeriveWithDeadline(deadline time.Time) (Lane, context.CancelFunc) {
 	var cancelFn context.CancelFunc
 	makeContext := func(newCtx context.Context, id string) context.Context {
@@ -410,11 +435,39 @@ func (ll *logLane) DeriveWithDeadline(deadline time.Time) (Lane, context.CancelF
 	return l, cancelFn
 }
 
+func (ll *logLane) DeriveWithDeadlineCause(deadline time.Time, cause error) (Lane, context.CancelFunc) {
+	var cancelFn context.CancelFunc
+	makeContext := func(newCtx context.Context, id string) context.Context {
+		var childCtx context.Context
+		childCtx, cancelFn = context.WithDeadlineCause(newCtx, deadline, cause)
+		return childCtx
+	}
+	l, err := deriveLogLane(ll, ll, makeContext, ll.onCreateLane)
+	if err != nil {
+		l.Fatal(err)
+	}
+	return l, cancelFn
+}
+
 func (ll *logLane) DeriveWithTimeout(duration time.Duration) (Lane, context.CancelFunc) {
 	var cancelFn context.CancelFunc
 	makeContext := func(newCtx context.Context, id string) context.Context {
 		var childCtx context.Context
 		childCtx, cancelFn = context.WithTimeout(newCtx, duration)
+		return childCtx
+	}
+	l, err := deriveLogLane(ll, ll, makeContext, ll.onCreateLane)
+	if err != nil {
+		l.Fatal(err)
+	}
+	return l, cancelFn
+}
+
+func (ll *logLane) DeriveWithTimeoutCause(duration time.Duration, cause error) (Lane, context.CancelFunc) {
+	var cancelFn context.CancelFunc
+	makeContext := func(newCtx context.Context, id string) context.Context {
+		var childCtx context.Context
+		childCtx, cancelFn = context.WithTimeoutCause(newCtx, duration, cause)
 		return childCtx
 	}
 	l, err := deriveLogLane(ll, ll, makeContext, ll.onCreateLane)

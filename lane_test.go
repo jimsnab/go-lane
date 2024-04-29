@@ -3,7 +3,9 @@ package lane
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"regexp"
@@ -163,6 +165,81 @@ func TestLaneWithCancel(t *testing.T) {
 	<-isDone
 }
 
+func TestLaneWithCancelCause(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+
+	level := tl.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	tl2, cancel := tl.DeriveWithCancelCause()
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-tl2.Done()
+		isDone <- struct{}{}
+	}()
+
+	time.Sleep(time.Millisecond)
+	cancel(io.ErrClosedPipe)
+
+	<-isDone
+
+	level = tl2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	if !errors.Is(context.Cause(tl2), io.ErrClosedPipe) {
+		t.Error("didn't get cancel cause")
+	}
+}
+
+func TestLaneWithoutCancel(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+	tl.WantDescendantEvents(true)
+
+	tl2, cancel := tl.DeriveWithCancel()
+
+	level := tl2.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	tl3 := tl2.DeriveWithoutCancel()
+
+	level = tl3.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 3 was not fatal")
+	}
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-tl2.Done()
+		tl3.Info("not canceled")
+		isDone <- struct{}{}
+	}()
+
+	time.Sleep(time.Millisecond)
+	cancel()
+
+	<-isDone
+
+	if !tl.FindEventText("INFO\tnot canceled") {
+		t.Error("didn't see tl3 log text")
+	}
+
+	select {
+	case <-tl3.Done():
+		t.Error("tl3 must not be done")
+	default:
+		// continue
+	}
+}
+
 func TestLaneWithTimeoutCancel(t *testing.T) {
 	tl := NewTestingLane(context.Background())
 
@@ -194,6 +271,35 @@ func TestLaneWithTimeoutCancel(t *testing.T) {
 	delta := time.Since(start)
 	if delta.Milliseconds() > 60 {
 		t.Error("Timeout too long")
+	}
+}
+
+func TestLaneWithTimeoutCancelCause(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+
+	level := tl.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	tl2, _ := tl.DeriveWithTimeoutCause(time.Millisecond, io.ErrNoProgress)
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-tl2.Done()
+		isDone <- struct{}{}
+	}()
+
+	level = tl2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	<-isDone
+
+	if !errors.Is(context.Cause(tl2), io.ErrNoProgress) {
+		t.Error("wrong cancel cause")
 	}
 }
 
@@ -259,6 +365,41 @@ func TestLaneWithDeadlineCancel(t *testing.T) {
 	delta := time.Since(start)
 	if delta.Milliseconds() > 60 {
 		t.Error("Timeout too long")
+	}
+}
+
+func TestLaneWithDeadlineCancelCause(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+
+	level := tl.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	start := time.Now()
+	tl2, _ := tl.DeriveWithDeadlineCause(start.Add(time.Millisecond*10), io.ErrShortBuffer)
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-tl2.Done()
+		isDone <- struct{}{}
+	}()
+
+	<-isDone
+
+	delta := time.Since(start)
+	if delta.Milliseconds() > 60 {
+		t.Error("Timeout too long")
+	}
+
+	level = tl2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	if !errors.Is(context.Cause(tl2), io.ErrShortBuffer) {
+		t.Error("wrong cancel cause")
 	}
 }
 
@@ -890,6 +1031,74 @@ func TestLogLaneWithCancel(t *testing.T) {
 	<-isDone
 }
 
+func TestLogLaneWithCancelCause(t *testing.T) {
+	ll := NewLogLane(context.Background())
+
+	level := ll.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	ll2, cancel := ll.DeriveWithCancelCause()
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-ll2.Done()
+		isDone <- struct{}{}
+	}()
+
+	time.Sleep(time.Millisecond)
+	cancel(io.ErrClosedPipe)
+
+	<-isDone
+
+	level = ll2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	if !errors.Is(context.Cause(ll2), io.ErrClosedPipe) {
+		t.Error("didn't get cancel cause")
+	}
+}
+
+func TestLogLaneWithoutCancel(t *testing.T) {
+	ll := NewLogLane(context.Background())
+
+	level := ll.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	ll2, cancel := ll.DeriveWithCancel()
+	ll3 := ll2.DeriveWithoutCancel()
+
+	level = ll3.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 3 was not fatal")
+	}
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-ll2.Done()
+		isDone <- struct{}{}
+	}()
+
+	time.Sleep(time.Millisecond)
+	cancel()
+
+	<-isDone
+
+	select {
+	case <-ll3.Done():
+		t.Error("ll3 must not be done")
+	default:
+		// continue
+	}
+}
+
 func TestLogLaneWithTimeoutCancel(t *testing.T) {
 	ll := NewLogLane(context.Background())
 
@@ -921,6 +1130,35 @@ func TestLogLaneWithTimeoutCancel(t *testing.T) {
 	delta := time.Since(start)
 	if delta.Milliseconds() > 60 {
 		t.Error("Timeout too long")
+	}
+}
+
+func TestLogLaneWithTimeoutCancelCause(t *testing.T) {
+	ll := NewLogLane(context.Background())
+
+	level := ll.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	ll2, _ := ll.DeriveWithTimeoutCause(time.Millisecond, io.ErrNoProgress)
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-ll2.Done()
+		isDone <- struct{}{}
+	}()
+
+	level = ll2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	<-isDone
+
+	if !errors.Is(context.Cause(ll2), io.ErrNoProgress) {
+		t.Error("wrong cancel cause")
 	}
 }
 
@@ -986,6 +1224,41 @@ func TestLogLaneWithDeadlineCancel(t *testing.T) {
 	delta := time.Since(start)
 	if delta.Milliseconds() > 60 {
 		t.Error("Timeout too long")
+	}
+}
+
+func TestLogLaneWithDeadlineCancelCause(t *testing.T) {
+	ll := NewLogLane(context.Background())
+
+	level := ll.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	start := time.Now()
+	ll2, _ := ll.DeriveWithDeadlineCause(start.Add(time.Millisecond*10), io.ErrShortBuffer)
+
+	level = ll2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-ll2.Done()
+		isDone <- struct{}{}
+	}()
+
+	<-isDone
+
+	delta := time.Since(start)
+	if delta.Milliseconds() > 60 {
+		t.Error("Timeout too long")
+	}
+
+	if !errors.Is(context.Cause(ll2), io.ErrShortBuffer) {
+		t.Error("wrong cancel cause")
 	}
 }
 
@@ -1599,6 +1872,74 @@ func TestNullLaneWithCancel(t *testing.T) {
 	<-isDone
 }
 
+func TestNullLaneWithCancelCause(t *testing.T) {
+	nl := NewNullLane(context.Background())
+
+	level := nl.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	nl2, cancel := nl.DeriveWithCancelCause()
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-nl2.Done()
+		isDone <- struct{}{}
+	}()
+
+	time.Sleep(time.Millisecond)
+	cancel(io.ErrClosedPipe)
+
+	<-isDone
+
+	level = nl2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	if !errors.Is(context.Cause(nl2), io.ErrClosedPipe) {
+		t.Error("didn't get cancel cause")
+	}
+}
+
+func TestNullLaneWithoutCancel(t *testing.T) {
+	nl := NewNullLane(context.Background())
+
+	level := nl.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	nl2, cancel := nl.DeriveWithCancel()
+	nl3 := nl2.DeriveWithoutCancel()
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-nl2.Done()
+		isDone <- struct{}{}
+	}()
+
+	time.Sleep(time.Millisecond)
+	cancel()
+
+	<-isDone
+
+	select {
+	case <-nl3.Done():
+		t.Error("nl3 must not be done")
+	default:
+		// continue
+	}
+
+	level = nl3.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 3 was not fatal")
+	}
+}
+
 func TestNullLaneWithTimeoutCancel(t *testing.T) {
 	nl := NewNullLane(context.Background())
 
@@ -1630,6 +1971,35 @@ func TestNullLaneWithTimeoutCancel(t *testing.T) {
 	delta := time.Since(start)
 	if delta.Milliseconds() > 60 {
 		t.Error("Timeout too long")
+	}
+}
+
+func TestNullLaneWithTimeoutCancelCause(t *testing.T) {
+	nl := NewNullLane(context.Background())
+
+	level := nl.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	nl2, _ := nl.DeriveWithTimeoutCause(time.Millisecond, io.ErrNoProgress)
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-nl2.Done()
+		isDone <- struct{}{}
+	}()
+
+	level = nl2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	<-isDone
+
+	if !errors.Is(context.Cause(nl2), io.ErrNoProgress) {
+		t.Error("wrong cancel cause")
 	}
 }
 
@@ -1695,6 +2065,41 @@ func TestNullLaneWithDeadlineCancel(t *testing.T) {
 	delta := time.Since(start)
 	if delta.Milliseconds() > 60 {
 		t.Error("Timeout too long")
+	}
+}
+
+func TestNullLaneWithDeadlineCancelCause(t *testing.T) {
+	nl := NewNullLane(context.Background())
+
+	level := nl.SetLogLevel(LogLevelFatal)
+	if level != LogLevelTrace {
+		t.Error("Log level not initially trace")
+	}
+
+	start := time.Now()
+	nl2, _ := nl.DeriveWithDeadlineCause(start.Add(time.Millisecond*10), io.ErrShortBuffer)
+
+	isDone := make(chan struct{})
+
+	go func() {
+		<-nl2.Done()
+		isDone <- struct{}{}
+	}()
+
+	<-isDone
+
+	level = nl2.SetLogLevel(LogLevelDebug)
+	if level != LogLevelFatal {
+		t.Error("Log level 2 was not fatal")
+	}
+
+	delta := time.Since(start)
+	if delta.Milliseconds() > 60 {
+		t.Error("Timeout too long")
+	}
+
+	if !errors.Is(context.Cause(nl2), io.ErrShortBuffer) {
+		t.Error("wrong cancel cause")
 	}
 }
 

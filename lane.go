@@ -89,11 +89,26 @@ type (
 		// Makes a lane for a child activity that needs its own correlation ID, with the cancelable context.
 		DeriveWithCancel() (Lane, context.CancelFunc)
 
+		// Makes a lane for a child activity that needs its own correlation ID, with the cancelable context.
+		// The cancel function can specify an error to indicate why the context was canceled.
+		DeriveWithCancelCause() (Lane, context.CancelCauseFunc)
+
+		// Makes a lane for a child activity that needs its own correlation ID, removing the cancelable context.
+		DeriveWithoutCancel() Lane
+
 		// Makes a lane for a child activity that needs its own correlation ID, with the time-canceled context.
 		DeriveWithDeadline(deadline time.Time) (Lane, context.CancelFunc)
 
+		// Makes a lane for a child activity that needs its own correlation ID, with the time-canceled context.
+		// The [cause] argument provides an error to use for timeout expiration.
+		DeriveWithDeadlineCause(deadline time.Time, cause error) (Lane, context.CancelFunc)
+
 		// Makes a lane for a child activity that needs its own correlation ID, with the relative time-canceled context.
 		DeriveWithTimeout(duration time.Duration) (Lane, context.CancelFunc)
+
+		// Makes a lane for a child activity that needs its own correlation ID, with the relative time-canceled context.
+		// The [cause] argument provides an error to use for timeout expiration.
+		DeriveWithTimeoutCause(duration time.Duration, cause error) (Lane, context.CancelFunc)
 
 		// Used to maintain the lane configuration while changing the context.
 		DeriveReplaceContext(ctx context.Context) Lane

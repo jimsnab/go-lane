@@ -123,6 +123,20 @@ func (nl *nullLane) DeriveWithCancel() (Lane, context.CancelFunc) {
 	return l, cancelFn
 }
 
+func (nl *nullLane) DeriveWithCancelCause() (Lane, context.CancelCauseFunc) {
+	childCtx, cancelFn := context.WithCancelCause(context.WithValue(nl.Context, ParentLaneIdKey, nl.LaneId()))
+	l := deriveNullLane(childCtx, nl.tees, nl.onPanic)
+	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
+	return l, cancelFn
+}
+
+func (nl *nullLane) DeriveWithoutCancel() Lane {
+	childCtx := context.WithoutCancel(context.WithValue(nl.Context, ParentLaneIdKey, nl.LaneId()))
+	l := deriveNullLane(childCtx, nl.tees, nl.onPanic)
+	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
+	return l
+}
+
 func (nl *nullLane) DeriveWithDeadline(deadline time.Time) (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithDeadline(context.WithValue(nl.Context, ParentLaneIdKey, nl.LaneId()), deadline)
 	l := deriveNullLane(childCtx, nl.tees, nl.onPanic)
@@ -130,8 +144,22 @@ func (nl *nullLane) DeriveWithDeadline(deadline time.Time) (Lane, context.Cancel
 	return l, cancelFn
 }
 
+func (nl *nullLane) DeriveWithDeadlineCause(deadline time.Time, cause error) (Lane, context.CancelFunc) {
+	childCtx, cancelFn := context.WithDeadlineCause(context.WithValue(nl.Context, ParentLaneIdKey, nl.LaneId()), deadline, cause)
+	l := deriveNullLane(childCtx, nl.tees, nl.onPanic)
+	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
+	return l, cancelFn
+}
+
 func (nl *nullLane) DeriveWithTimeout(duration time.Duration) (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithTimeout(context.WithValue(nl.Context, ParentLaneIdKey, nl.LaneId()), duration)
+	l := deriveNullLane(childCtx, nl.tees, nl.onPanic)
+	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
+	return l, cancelFn
+}
+
+func (nl *nullLane) DeriveWithTimeoutCause(duration time.Duration, cause error) (Lane, context.CancelFunc) {
+	childCtx, cancelFn := context.WithTimeoutCause(context.WithValue(nl.Context, ParentLaneIdKey, nl.LaneId()), duration, cause)
 	l := deriveNullLane(childCtx, nl.tees, nl.onPanic)
 	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
 	return l, cancelFn
