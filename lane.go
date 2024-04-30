@@ -18,6 +18,8 @@ const (
 type (
 	LaneLogLevel int
 
+	OptionalContext context.Context
+
 	Lane interface {
 		context.Context
 
@@ -111,7 +113,7 @@ type (
 		DeriveWithTimeoutCause(duration time.Duration, cause error) (Lane, context.CancelFunc)
 
 		// Used to maintain the lane configuration while changing the context.
-		DeriveReplaceContext(ctx context.Context) Lane
+		DeriveReplaceContext(ctx OptionalContext) Lane
 
 		// Turns on stack trace logging.
 		EnableStackTrace(level LaneLogLevel, enable bool) (wasEnabled bool)
@@ -129,6 +131,9 @@ type (
 		// an injected fatal error. Use this with care, and be sure to call runtime.Goexit() so that
 		// the test version of Panic doesn't return.
 		SetPanicHandler(handler Panic)
+
+		// Gets the parent lane, or untyped nil if no parent.
+		Parent() Lane
 	}
 
 	Panic func()

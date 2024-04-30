@@ -57,7 +57,7 @@ Lane interface {
 	DeriveWithDeadlineCause(deadline time.Time, cause error) (Lane, context.CancelFunc)
 	DeriveWithTimeout(duration time.Duration) (Lane, context.CancelFunc)
 	DeriveWithTimeoutCause(duration time.Duration, cause error) (Lane, context.CancelFunc)
-	DeriveReplaceContext(ctx context.Context) Lane
+	DeriveReplaceContext(ctx OptionalContext) Lane
 
 	EnableStackTrace(level LaneLogLevel, enable bool) (wasEnabled bool)
 
@@ -65,6 +65,8 @@ Lane interface {
 	RemoveTee(l Lane)
 
 	SetPanicHandler(handler Panic)
+
+	Parent() Lane
 }
 ```
 
@@ -133,3 +135,27 @@ routines started by the test are stopped by its replacement panic handler.
 
 At minimum, the test's replacement panic handler must not let the panicking go
 routine continue execution (it should call `runtime.Goexit()`).
+
+# OptionalContext
+
+`lane.OptionalContext` is an alias type for `context.Context`. It's used because linters want
+to enforce callers to call `context.Background()` or `context.TODO()`. Callers can certainly
+do that, but the linter rule is questionable -- just pass `nil`, what's the problem?
+
+# Parent Context
+
+Ordinary `context` does not provide a way to navigate to a parent. But sometimes this
+is wanted, such as when implementing diagnostics.
+
+The parent lane ID is available as a `context.Value()` under the name `ParentLaneIdKey`:
+
+The parent lane (which is a `context`) is also available by calling `Lane.Parent()`.
+
+```go
+	lOne := lane.NewLogLane(nil)
+	lTwo := lOne.Derive()
+	fmt.Printf("lOne %s == lTwo's parent %v\n", lOne.LaneId(), lTwo.Value(lane.ParentLaneIdKey))
+	
+	lThree := lTwo.Parent()
+	fmt.Printf("lOne %s == lThree %s\n", lOne.Lane(), lThree.LaneId())
+```

@@ -23,6 +23,7 @@ type (
 		tees       []Lane
 		onPanic    Panic
 		journeyId  string
+		parent     Lane
 	}
 
 	wrappedNullWriter struct {
@@ -32,14 +33,19 @@ type (
 	nullContext string
 )
 
-func NewNullLane(ctx context.Context) Lane {
-	return deriveNullLane(ctx, []Lane{}, nil)
+func NewNullLane(ctx OptionalContext) Lane {
+	return deriveNullLane(nil, ctx, []Lane{}, nil)
 }
 
-func deriveNullLane(ctx context.Context, tees []Lane, onPanic Panic) Lane {
+func deriveNullLane(parent Lane, ctx context.Context, tees []Lane, onPanic Panic) Lane {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	nl := nullLane{
 		stackTrace: make([]atomic.Bool, int(LogLevelFatal+1)),
 		tees:       tees,
+		parent:     parent,
 	}
 	nl.SetPanicHandler(onPanic)
 	nl.SetOwner(&nl)
@@ -111,66 +117,63 @@ func (nl *nullLane) Close() {
 }
 
 func (nl *nullLane) Derive() Lane {
-	l := deriveNullLane(context.WithValue(nl.Context, ParentLaneIdKey, nl.LaneId()), nl.tees, nl.onPanic)
+	l := deriveNullLane(nl, context.WithValue(nl.Context, ParentLaneIdKey, nl.LaneId()), nl.tees, nl.onPanic)
 	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
 	return l
 }
 
 func (nl *nullLane) DeriveWithCancel() (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithCancel(context.WithValue(nl.Context, ParentLaneIdKey, nl.LaneId()))
-	l := deriveNullLane(childCtx, nl.tees, nl.onPanic)
+	l := deriveNullLane(nl, childCtx, nl.tees, nl.onPanic)
 	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
 	return l, cancelFn
 }
 
 func (nl *nullLane) DeriveWithCancelCause() (Lane, context.CancelCauseFunc) {
 	childCtx, cancelFn := context.WithCancelCause(context.WithValue(nl.Context, ParentLaneIdKey, nl.LaneId()))
-	l := deriveNullLane(childCtx, nl.tees, nl.onPanic)
+	l := deriveNullLane(nl, childCtx, nl.tees, nl.onPanic)
 	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
 	return l, cancelFn
 }
 
 func (nl *nullLane) DeriveWithoutCancel() Lane {
 	childCtx := context.WithoutCancel(context.WithValue(nl.Context, ParentLaneIdKey, nl.LaneId()))
-	l := deriveNullLane(childCtx, nl.tees, nl.onPanic)
+	l := deriveNullLane(nl, childCtx, nl.tees, nl.onPanic)
 	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
 	return l
 }
 
 func (nl *nullLane) DeriveWithDeadline(deadline time.Time) (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithDeadline(context.WithValue(nl.Context, ParentLaneIdKey, nl.LaneId()), deadline)
-	l := deriveNullLane(childCtx, nl.tees, nl.onPanic)
+	l := deriveNullLane(nl, childCtx, nl.tees, nl.onPanic)
 	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
 	return l, cancelFn
 }
 
 func (nl *nullLane) DeriveWithDeadlineCause(deadline time.Time, cause error) (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithDeadlineCause(context.WithValue(nl.Context, ParentLaneIdKey, nl.LaneId()), deadline, cause)
-	l := deriveNullLane(childCtx, nl.tees, nl.onPanic)
+	l := deriveNullLane(nl, childCtx, nl.tees, nl.onPanic)
 	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
 	return l, cancelFn
 }
 
 func (nl *nullLane) DeriveWithTimeout(duration time.Duration) (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithTimeout(context.WithValue(nl.Context, ParentLaneIdKey, nl.LaneId()), duration)
-	l := deriveNullLane(childCtx, nl.tees, nl.onPanic)
+	l := deriveNullLane(nl, childCtx, nl.tees, nl.onPanic)
 	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
 	return l, cancelFn
 }
 
 func (nl *nullLane) DeriveWithTimeoutCause(duration time.Duration, cause error) (Lane, context.CancelFunc) {
 	childCtx, cancelFn := context.WithTimeoutCause(context.WithValue(nl.Context, ParentLaneIdKey, nl.LaneId()), duration, cause)
-	l := deriveNullLane(childCtx, nl.tees, nl.onPanic)
+	l := deriveNullLane(nl, childCtx, nl.tees, nl.onPanic)
 	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
 	return l, cancelFn
 }
 
-func (nl *nullLane) DeriveReplaceContext(ctx context.Context) Lane {
-	l := NewNullLane(ctx)
+func (nl *nullLane) DeriveReplaceContext(ctx OptionalContext) Lane {
+	l := deriveNullLane(nl, ctx, append([]Lane{}, nl.tees...), nil)
 	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
-	for _, tee := range nl.tees {
-		l.AddTee(tee)
-	}
 	return l
 }
 
@@ -226,4 +229,11 @@ func (nl *nullLane) SetPanicHandler(handler Panic) {
 
 func (wnw *wrappedNullWriter) Write(p []byte) (n int, err error) {
 	return len(p), nil
+}
+
+func (nl *nullLane) Parent() Lane {
+	if nl.parent == nil {
+		return nl.parent
+	}
+	return nil // untyped nil
 }

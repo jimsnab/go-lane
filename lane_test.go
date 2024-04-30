@@ -25,6 +25,8 @@ const kTestStr testKeyType = "test"
 const kTestBase testKeyType = "base"
 const kTestReplaced testValueType = "replaced"
 
+//nolint:SA1012
+
 func TestLane(t *testing.T) {
 	tl := NewTestingLane(context.Background())
 
@@ -827,7 +829,7 @@ func TestLaneWrappedLogger(t *testing.T) {
 }
 
 func TestLaneWrappedLogger2(t *testing.T) {
-	ll := NewLogLaneWithCR(context.Background())
+	ll := NewLogLaneWithCR(nil)
 
 	ll.Logger().Printf("2024/04/09 11:37:37 this is a test\n")
 
@@ -908,7 +910,7 @@ func TestLaneDerivedCaptureGrandchild(t *testing.T) {
 }
 
 func TestLogLane(t *testing.T) {
-	ll := NewLogLane(context.Background())
+	ll := NewLogLane(nil)
 
 	lid := ll.LaneId()
 	if len(lid) != 10 {
@@ -942,7 +944,7 @@ func TestLogLane(t *testing.T) {
 }
 
 func TestLogLaneJourneyId(t *testing.T) {
-	ll := NewLogLane(context.Background())
+	ll := NewLogLane(nil)
 	id := uuid.New().String()
 	id = id[len(id)-10:]
 	ll.SetJourneyId(id)
@@ -1830,7 +1832,7 @@ func TestNullLane(t *testing.T) {
 }
 
 func TestNullLaneSetLevel(t *testing.T) {
-	nl := NewNullLane(context.Background())
+	nl := NewNullLane(nil)
 
 	level := nl.SetLogLevel(LogLevelFatal)
 	if level != LogLevelTrace {
@@ -1849,7 +1851,7 @@ func TestNullLaneSetLevel(t *testing.T) {
 }
 
 func TestNullLaneInheritLevel(t *testing.T) {
-	nl := NewNullLane(context.Background())
+	nl := NewNullLane(nil)
 
 	level := nl.SetLogLevel(LogLevelFatal)
 	if level != LogLevelTrace {
@@ -2155,17 +2157,17 @@ func TestNullLaneWithDeadlineExpire(t *testing.T) {
 }
 
 func TestNullLaneDerivation(t *testing.T) {
-	pll := NewNullLane(context.Background())
-	ll := pll.Derive()
+	pnl := NewNullLane(context.Background())
+	nl := pnl.Derive()
 
 	var buf1 bytes.Buffer
 	log.SetOutput(&buf1)
 	defer func() { log.SetOutput(os.Stderr) }()
-	ll.Logger().Println("this is a test")
+	nl.Logger().Println("this is a test")
 
 	var buf2 bytes.Buffer
 	log.SetOutput(&buf2)
-	pll.Logger().Println("this is the parent")
+	pnl.Logger().Println("this is the parent")
 
 	if buf1.Len() != 0 || buf2.Len() != 0 {
 		t.Errorf("unexpected data in logger output")
@@ -2356,7 +2358,7 @@ func TestDiskLaneStack(t *testing.T) {
 }
 
 func TestDiskLaneBadPath(t *testing.T) {
-	_, err := NewDiskLane(context.Background(), "")
+	_, err := NewDiskLane(nil, "")
 	if err == nil {
 		t.Fatal("make test.log")
 	}
@@ -2503,7 +2505,7 @@ func TestPanicTestLane(t *testing.T) {
 }
 
 func TestPanicTestLaneF(t *testing.T) {
-	tl := NewTestingLane(context.Background())
+	tl := NewTestingLane(nil)
 	wg := setTestPanicHandler(tl)
 	go func() {
 		tl.Fatalf("stop me")
@@ -2623,4 +2625,67 @@ func TestPanicDiskLaneDerived(t *testing.T) {
 		panic("unreachable")
 	}()
 	wg.Wait()
+}
+
+func TestLaneParent(t *testing.T) {
+	ptl := NewTestingLane(context.Background())
+	tl := ptl.Derive().(TestingLane)
+
+	tl.Parent().Logger().Println("this is the parent")
+	tl.Logger().Println("this is the child")
+
+	if !ptl.VerifyEventText("INFO\tthis is the parent") {
+		t.Errorf("Test events don't match")
+	}
+
+	if !tl.VerifyEventText("INFO\tthis is the child") {
+		t.Errorf("Test events don't match")
+	}
+
+	if ptl.Parent() != nil {
+		t.Error("root parent not nil")
+	}
+}
+
+func TestLogLaneParent(t *testing.T) {
+	pll := NewLogLane(context.Background())
+	ll := pll.Derive()
+
+	var buf1 bytes.Buffer
+	log.SetOutput(&buf1)
+	defer func() { log.SetOutput(os.Stderr) }()
+	ll.Logger().Println("this is a test")
+
+	var buf2 bytes.Buffer
+	log.SetOutput(&buf2)
+	ll.Parent().Logger().Println("this is the parent")
+
+	verifyLogLaneEvents(t, ll, "INFO {GUID} this is a test", buf1)
+	verifyLogLaneEvents(t, pll, "INFO {GUID} this is the parent", buf2)
+
+	if pll.Parent() != nil {
+		t.Error("root parent not nil")
+	}
+}
+
+func TestNullLaneParent(t *testing.T) {
+	pnl := NewNullLane(context.Background())
+	nl := pnl.Derive()
+
+	var buf1 bytes.Buffer
+	log.SetOutput(&buf1)
+	defer func() { log.SetOutput(os.Stderr) }()
+	nl.Logger().Println("this is a test")
+
+	var buf2 bytes.Buffer
+	log.SetOutput(&buf2)
+	nl.Parent().Logger().Println("this is the parent")
+
+	if buf1.Len() != 0 || buf2.Len() != 0 {
+		t.Errorf("unexpected data in logger output")
+	}
+
+	if pnl.Parent() != nil {
+		t.Error("root parent not nil")
+	}
 }

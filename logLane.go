@@ -37,6 +37,7 @@ type (
 		onPanic      Panic
 		logMask      int
 		outer        Lane
+		parent       *logLane
 		onCreateLane OnCreateLane
 	}
 
@@ -72,7 +73,7 @@ func isLogCrLf() bool {
 	return buf.Bytes()[0] == '\r'
 }
 
-func NewLogLane(ctx context.Context) Lane {
+func NewLogLane(ctx OptionalContext) Lane {
 	l, _ := deriveLogLane(nil, ctx, nil, createLogLane)
 	return l
 }
@@ -82,7 +83,7 @@ func NewLogLane(ctx context.Context) Lane {
 //   - onCreate creates a new instance of the outer lane and provides the embedded log lane.
 //   - startingCtx provides an optional context instance, to start a lane from a pre-existing
 //     context
-func NewEmbeddedLogLane(onCreate OnCreateLane, startingCtx context.Context) (l Lane, err error) {
+func NewEmbeddedLogLane(onCreate OnCreateLane, startingCtx OptionalContext) (l Lane, err error) {
 	laneOuter, embedded, writer, err := onCreate(nil)
 	if err != nil {
 		return
@@ -129,9 +130,14 @@ func deriveLogLane(parent *logLane, startingCtx context.Context, contextCallback
 
 // Sets all the fields of a zero-initialized ll
 func (ll *logLane) initialize(laneOuter Lane, pll *logLane, startingCtx context.Context, contextCallback deriveContext, onCreate OnCreateLane, writer *log.Logger) {
+	if startingCtx == nil {
+		startingCtx = context.Background()
+	}
+
 	ll.stackTrace = make([]atomic.Bool, int(LogLevelFatal+1))
 	ll.onCreateLane = onCreate // keep this reference so that future Derive() calls can invoke it
 	ll.outer = laneOuter
+	ll.parent = pll
 	ll.SetPanicHandler(nil)
 
 	// make a logging instance that ultimately does logging via the lane
@@ -164,9 +170,6 @@ func (ll *logLane) initialize(laneOuter Lane, pll *logLane, startingCtx context.
 	// want another context feature such as WithCancel or WithDeadline. This requires
 	// conditional wrapping, which is supported here with an optional callback.
 	var newCtx context.Context
-	if startingCtx == nil {
-		startingCtx = context.Background()
-	}
 
 	if pll != nil {
 		newCtx = context.WithValue(context.WithValue(startingCtx, LogLaneIdKey, id), ParentLaneIdKey, pll.LaneId())
@@ -193,7 +196,7 @@ func (ll *logLane) AddCR(shouldAdd bool) (prior bool) {
 }
 
 // For cases where \r\n line endings are required (ex: vscode terminal)
-func NewLogLaneWithCR(ctx context.Context) Lane {
+func NewLogLaneWithCR(ctx OptionalContext) Lane {
 	ll, _ := deriveLogLane(nil, ctx, nil, createLogLane)
 	if !isLogCrLf() {
 		p := ll.(LogLane)
@@ -477,7 +480,11 @@ func (ll *logLane) DeriveWithTimeoutCause(duration time.Duration, cause error) (
 	return l, cancelFn
 }
 
-func (ll *logLane) DeriveReplaceContext(ctx context.Context) Lane {
+func (ll *logLane) DeriveReplaceContext(ctx OptionalContext) Lane {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	makeContext := func(newCtx context.Context, id string) context.Context {
 		return context.WithValue(ctx, LogLaneIdKey, id)
 	}
@@ -576,4 +583,11 @@ func (wlw *wrappedLogWriter) Write(p []byte) (n int, err error) {
 	wlw.outer.Info(text)
 
 	return len(p), nil
+}
+
+func (ll *logLane) Parent() Lane {
+	if ll.parent != nil {
+		return ll.parent
+	}
+	return nil // untyped nil
 }

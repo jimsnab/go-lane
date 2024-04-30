@@ -1,7 +1,6 @@
 package lane
 
 import (
-	"context"
 	"log"
 	"os"
 	"syscall"
@@ -14,7 +13,7 @@ type (
 	}
 )
 
-func NewDiskLane(ctx context.Context, logFile string) (l Lane, err error) {
+func NewDiskLane(ctx OptionalContext, logFile string) (l Lane, err error) {
 
 	createFn := func(parentLane Lane) (newLane Lane, ll LogLane, writer *log.Logger, err error) {
 		newLane, ll, writer, err = createDiskLane(logFile, parentLane)

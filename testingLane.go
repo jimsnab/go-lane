@@ -75,11 +75,15 @@ type (
 
 const testing_lane_id testingLaneId = "testing_lane"
 
-func NewTestingLane(ctx context.Context) TestingLane {
+func NewTestingLane(ctx OptionalContext) TestingLane {
 	return deriveTestingLane(ctx, nil, []Lane{})
 }
 
 func deriveTestingLane(ctx context.Context, parent *testingLane, tees []Lane) TestingLane {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	tl := testingLane{
 		stackTrace: make([]atomic.Bool, int(LogLevelFatal+1)),
 		parent:     parent,
@@ -451,7 +455,7 @@ func (tl *testingLane) DeriveWithTimeoutCause(duration time.Duration, cause erro
 	return l, cancelFn
 }
 
-func (tl *testingLane) DeriveReplaceContext(ctx context.Context) Lane {
+func (tl *testingLane) DeriveReplaceContext(ctx OptionalContext) Lane {
 	l := NewTestingLane(ctx)
 	l.WantDescendantEvents(tl.wantDescendantEvents)
 
@@ -513,6 +517,13 @@ func (tl *testingLane) SetPanicHandler(handler Panic) {
 		handler = func() { panic("fatal error") }
 	}
 	tl.onPanic = handler
+}
+
+func (tl *testingLane) Parent() Lane {
+	if tl.parent != nil {
+		return tl.parent
+	}
+	return nil // untyped nil
 }
 
 func (tlw *testingLogWriter) Write(p []byte) (n int, err error) {
