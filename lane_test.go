@@ -208,7 +208,16 @@ func TestLaneWithoutCancel(t *testing.T) {
 		t.Error("Log level not initially trace")
 	}
 
+	l := tl2.(TestingLane)
+	if !l.WantDescendantEvents(true) {
+		t.Error("derived lane did not propogate wantDescendantEvents")
+	}
+
 	tl3 := tl2.DeriveWithoutCancel()
+	l = tl3.(TestingLane)
+	if !l.WantDescendantEvents(true) {
+		t.Error("derived lane did not propogate wantDescendantEvents")
+	}
 
 	level = tl3.SetLogLevel(LogLevelDebug)
 	if level != LogLevelFatal {
@@ -437,9 +446,15 @@ func TestLaneWithDeadlineExpire(t *testing.T) {
 func TestLaneReplaceContext(t *testing.T) {
 	c1 := context.WithValue(context.Background(), kTestBase, kTestBase)
 	tl := NewTestingLane(c1)
+	tl.WantDescendantEvents(true)
 
 	c2 := context.WithValue(context.Background(), kTestBase, kTestReplaced)
 	tl2 := tl.DeriveReplaceContext(c2)
+
+	l := tl2.(TestingLane)
+	if !l.WantDescendantEvents(false) {
+		t.Error("derived lane did not propogate wantDescendantEvents")
+	}
 
 	if tl2.Value(kTestBase) != kTestReplaced {
 		t.Error("Base not replaced")
@@ -448,6 +463,11 @@ func TestLaneReplaceContext(t *testing.T) {
 	tl3 := tl2.Derive()
 	if tl3.Value(kTestBase) != kTestReplaced {
 		t.Error("Derived incorrect")
+	}
+
+	l = tl3.(TestingLane)
+	if l.WantDescendantEvents(false) {
+		t.Error("derived lane did not propogate wantDescendantEvents")
 	}
 }
 

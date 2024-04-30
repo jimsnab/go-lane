@@ -94,6 +94,7 @@ func deriveTestingLane(ctx context.Context, parent *testingLane, tees []Lane) Te
 
 	if parent != nil {
 		tl.onPanic = parent.onPanic
+		tl.wantDescendantEvents = parent.wantDescendantEvents
 	}
 
 	tl.Context = context.WithValue(ctx, testing_lane_id, uuid.New().String())
@@ -452,6 +453,7 @@ func (tl *testingLane) DeriveWithTimeoutCause(duration time.Duration, cause erro
 
 func (tl *testingLane) DeriveReplaceContext(ctx context.Context) Lane {
 	l := NewTestingLane(ctx)
+	l.WantDescendantEvents(tl.wantDescendantEvents)
 
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
