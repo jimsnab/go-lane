@@ -298,12 +298,20 @@ func (ll *logLane) Tracef(format string, args ...any) {
 	ll.printfMsg(LogLevelTrace, "TRACE", func(l Lane) { l.Tracef(format, args...) }, format, args...)
 }
 
+func (ll *logLane) TraceObject(message string, obj any) {
+	LogObject(ll, LogLevelTrace, message, obj)
+}
+
 func (ll *logLane) Debug(args ...any) {
 	ll.printMsg(LogLevelDebug, "DEBUG", func(l Lane) { l.Debug(args...) }, args...)
 }
 
 func (ll *logLane) Debugf(format string, args ...any) {
 	ll.printfMsg(LogLevelDebug, "DEBUG", func(l Lane) { l.Debugf(format, args...) }, format, args...)
+}
+
+func (ll *logLane) DebugObject(message string, obj any) {
+	LogObject(ll, LogLevelDebug, message, obj)
 }
 
 func (ll *logLane) Info(args ...any) {
@@ -314,12 +322,20 @@ func (ll *logLane) Infof(format string, args ...any) {
 	ll.printfMsg(LogLevelInfo, "INFO", func(l Lane) { l.Infof(format, args...) }, format, args...)
 }
 
+func (ll *logLane) InfoObject(message string, obj any) {
+	LogObject(ll, LogLevelInfo, message, obj)
+}
+
 func (ll *logLane) Warn(args ...any) {
 	ll.printMsg(LogLevelWarn, "WARN", func(l Lane) { l.Warn(args...) }, args...)
 }
 
 func (ll *logLane) Warnf(format string, args ...any) {
 	ll.printfMsg(LogLevelWarn, "WARN", func(l Lane) { l.Warnf(format, args...) }, format, args...)
+}
+
+func (ll *logLane) WarnObject(message string, obj any) {
+	LogObject(ll, LogLevelWarn, message, obj)
 }
 
 func (ll *logLane) Error(args ...any) {
@@ -330,12 +346,20 @@ func (ll *logLane) Errorf(format string, args ...any) {
 	ll.printfMsg(LogLevelError, "ERROR", func(l Lane) { l.Errorf(format, args...) }, format, args...)
 }
 
+func (ll *logLane) ErrorObject(message string, obj any) {
+	LogObject(ll, LogLevelError, message, obj)
+}
+
 func (ll *logLane) PreFatal(args ...any) {
 	ll.printMsg(LogLevelFatal, "FATAL", func(l Lane) { l.PreFatal(args...) }, args...)
 }
 
 func (ll *logLane) PreFatalf(format string, args ...any) {
 	ll.printfMsg(LogLevelFatal, "FATAL", func(l Lane) { l.PreFatalf(format, args...) }, format, args...)
+}
+
+func (ll *logLane) PreFatalObject(message string, obj any) {
+	LogObject(ll, logLevelPreFatal, message, obj)
 }
 
 func (ll *logLane) Fatal(args ...any) {
@@ -345,6 +369,11 @@ func (ll *logLane) Fatal(args ...any) {
 
 func (ll *logLane) Fatalf(format string, args ...any) {
 	ll.PreFatalf(format, args...)
+	ll.onPanic()
+}
+
+func (ll *logLane) FatalObject(message string, obj any) {
+	ll.PreFatalObject(message, obj)
 	ll.onPanic()
 }
 

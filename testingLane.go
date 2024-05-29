@@ -175,9 +175,12 @@ func (tl *testingLane) VerifyEventText(eventText string) (match bool) {
 	if eventText != "" {
 		lines := strings.Split(eventText, "\n")
 		for _, line := range lines {
+			if line == "" {
+				continue
+			}
 			parts := strings.Split(line, "\t")
 			if len(parts) != 2 {
-				panic("eventText line must have exactly one tab separator")
+				panic(fmt.Sprintf("eventText line must have exactly one tab separator but has %d parts: %s", len(parts), line))
 			}
 			text := parts[1]
 			text = strings.ReplaceAll(text, "\\t", "\t")
@@ -290,6 +293,10 @@ func (tl *testingLane) Tracef(format string, args ...any) {
 	tl.tee(func(l Lane) { l.Tracef(format, args...) })
 }
 
+func (tl *testingLane) TraceObject(message string, obj any) {
+	LogObject(tl, LogLevelTrace, message, obj)
+}
+
 func (tl *testingLane) Debug(args ...any) {
 	tl.recordLaneEvent(LogLevelDebug, "DEBUG", nil, args...)
 	tl.tee(func(l Lane) { l.Debug(args...) })
@@ -298,6 +305,10 @@ func (tl *testingLane) Debug(args ...any) {
 func (tl *testingLane) Debugf(format string, args ...any) {
 	tl.recordLaneEvent(LogLevelDebug, "DEBUG", &format, args...)
 	tl.tee(func(l Lane) { l.Debugf(format, args...) })
+}
+
+func (tl *testingLane) DebugObject(message string, obj any) {
+	LogObject(tl, LogLevelDebug, message, obj)
 }
 
 func (tl *testingLane) Info(args ...any) {
@@ -310,6 +321,10 @@ func (tl *testingLane) Infof(format string, args ...any) {
 	tl.tee(func(l Lane) { l.Infof(format, args...) })
 }
 
+func (tl *testingLane) InfoObject(message string, obj any) {
+	LogObject(tl, LogLevelInfo, message, obj)
+}
+
 func (tl *testingLane) Warn(args ...any) {
 	tl.recordLaneEvent(LogLevelWarn, "WARN", nil, args...)
 	tl.tee(func(l Lane) { l.Warn(args...) })
@@ -318,6 +333,10 @@ func (tl *testingLane) Warn(args ...any) {
 func (tl *testingLane) Warnf(format string, args ...any) {
 	tl.recordLaneEvent(LogLevelWarn, "WARN", &format, args...)
 	tl.tee(func(l Lane) { l.Warnf(format, args...) })
+}
+
+func (tl *testingLane) WarnObject(message string, obj any) {
+	LogObject(tl, LogLevelWarn, message, obj)
 }
 
 func (tl *testingLane) Error(args ...any) {
@@ -332,6 +351,10 @@ func (tl *testingLane) Errorf(format string, args ...any) {
 	tl.tee(func(l Lane) { l.Errorf(format, args...) })
 }
 
+func (tl *testingLane) ErrorObject(message string, obj any) {
+	LogObject(tl, LogLevelError, message, obj)
+}
+
 func (tl *testingLane) PreFatal(args ...any) {
 	tl.recordLaneEvent(LogLevelFatal, "FATAL", nil, args...)
 	tl.tee(func(l Lane) { l.PreFatal(args...) })
@@ -342,6 +365,10 @@ func (tl *testingLane) PreFatalf(format string, args ...any) {
 	tl.tee(func(l Lane) { l.PreFatalf(format, args...) })
 }
 
+func (tl *testingLane) PreFatalObject(message string, obj any) {
+	LogObject(tl, logLevelPreFatal, message, obj)
+}
+
 func (tl *testingLane) Fatal(args ...any) {
 	tl.PreFatal(args...)
 	tl.onPanic()
@@ -350,6 +377,10 @@ func (tl *testingLane) Fatal(args ...any) {
 func (tl *testingLane) Fatalf(format string, args ...any) {
 	tl.PreFatalf(format, args...)
 	tl.onPanic()
+}
+
+func (tl *testingLane) FatalObject(message string, obj any) {
+	LogObject(tl, LogLevelFatal, message, obj)
 }
 
 func (tl *testingLane) logStack(level LaneLogLevel) {

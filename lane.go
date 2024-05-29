@@ -13,6 +13,7 @@ const (
 	LogLevelWarn
 	LogLevelError
 	LogLevelFatal
+	logLevelPreFatal
 )
 
 type (
@@ -50,36 +51,50 @@ type (
 		Trace(args ...any)
 		// Trace, intended for checkpoint information. Messages formated with fmt.Sprintf().
 		Tracef(format string, args ...any)
+		// Trace, intended for checkpoint information. Object [obj] is converted to JSON, including private fields, and concatenated to [message].
+		TraceObject(message string, obj any)
 
 		// Debug, intended for diagnostic information such as unusual conditions or helpful variable values. Messages formated with fmt.Sprint().
 		Debug(args ...any)
 		// Debug, intended for diagnostic information such as unusual conditions or helpful variable values. Messages formated with fmt.Sprintf().
 		Debugf(format string, args ...any)
+		// Debug, intended for diagnostic information such as unusual conditions or helpful variable values. Object [obj] is converted to JSON, including private fields, and concatenated to [message].
+		DebugObject(message string, obj any)
 
 		// Info, intended for details as the app runs in a healthy state, such as end user requests and results. Messages formated with fmt.Sprint().
 		Info(args ...any)
 		// Info, intended for details as the app runs in a healthy state, such as end user requests and results. Messages formated with fmt.Sprintf().
 		Infof(format string, args ...any)
+		// Info, intended for details as the app runs in a healthy state, such as end user requests and results. Object [obj] is converted to JSON, including private fields, and concatenated to [message].
+		InfoObject(message string, obj any)
 
 		// Warn, intended for recoverable, ignorable or ambiguous errors. Messages formated with fmt.Sprint().
 		Warn(args ...any)
 		// Warn, intended for recoverable, ignorable or ambiguous errors. Messages formated with fmt.Sprintf().
 		Warnf(format string, args ...any)
+		// Warn, intended for recoverable, ignorable or ambiguous errors. Object [obj] is converted to JSON, including private fields, and concatenated to [message].
+		WarnObject(message string, obj any)
 
 		// Error, intended for application faults that alert or explain unwanted conditions. Messages formated with fmt.Sprint().
 		Error(args ...any)
 		// Error, intended for application faults that alert or explain unwanted conditions. Messages formated with fmt.Sprintf().
 		Errorf(format string, args ...any)
+		// Error, intended for application faults that alert or explain unwanted conditions. Object [obj] is converted to JSON, including private fields, and concatenated to [message].
+		ErrorObject(message string, obj any)
 
 		// Severe error, intended for details about why an application will soon terminate. Messages formated with fmt.Sprint().
 		PreFatal(args ...any)
 		// Severe error, intended for details about why an application will soon terminate. Messages formated with fmt.Sprintf().
 		PreFatalf(format string, args ...any)
+		// Severe error, intended for details about why an application will soon terminate. Object [obj] is converted to JSON, including private fields, and concatenated to [message].
+		PreFatalObject(message string, obj any)
 
 		// Fatal error, intended for details about why an application can't continue and must terminate. Messages formated with fmt.Sprint(). The app panics after logging completes.
 		Fatal(args ...any)
 		// Fatal error, intended for details about why an application can't continue and must terminate. Messages formated with fmt.Sprintf(). The app panics after logging completes.
 		Fatalf(format string, args ...any)
+		// Fatal error, intended for details about why an application can't continue and must terminate. Messages formated with fmt.Sprintf(). Object [obj] is converted to JSON, including private fields, and concatenated to [message].
+		FatalObject(message string, obj any)
 
 		// Exposes access to the underlying log object.
 		Logger() *log.Logger

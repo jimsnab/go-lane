@@ -17,8 +17,8 @@ func myFunc() {
 }
 ```
 
-At the root, a lane needs a context, and that is typically `context.Background()`. From there, instead of
-passing a `context` instance as the first parameter, pass the lane `l`.
+At the root, a lane needs a context, and that is typically `nil` or `context.Background()`. From there, 
+instead of passing a `context` instance as the first parameter, pass the lane `l`.
 
 ```go
 func someFunc(l lane.Lane) {
@@ -34,29 +34,50 @@ Lane interface {
 	LaneId() string
 	SetJourneyId(id string)
 	SetLogLevel(newLevel LaneLogLevel) (priorLevel LaneLogLevel)
+
 	Trace(args ...any)
 	Tracef(format string, args ...any)
+	TraceObject(message string, obj any)
+
 	Debug(args ...any)
 	Debugf(format string, args ...any)
+	DebugObject(message string, obj any)
+
 	Info(args ...any)
 	Infof(format string, args ...any)
+	InfoObject(message string, obj any)
+
 	Warn(args ...any)
 	Warnf(format string, args ...any)
+	WarnObject(message string, obj any)
+
 	Error(args ...any)
 	Errorf(format string, args ...any)
+	ErrorObject(message string, obj any)
+
+	PreFatal(args ...any)
+	PreFatalf(format string, args ...any)
+	PreFatalObject(message string, obj any)
+
 	Fatal(args ...any)
 	Fatalf(format string, args ...any)
+	FatalObject(message string, obj any)
+
 	Logger() *log.Logger
 	Close()
 
 	Derive() Lane
+
 	DeriveWithCancel() (Lane, context.CancelFunc)
 	DeriveWithCancelCause() (Lane, context.CancelCauseFunc)
 	DeriveWithoutCancel() (Lane, context.CancelFunc)
+
 	DeriveWithDeadline(deadline time.Time) (Lane, context.CancelFunc)
 	DeriveWithDeadlineCause(deadline time.Time, cause error) (Lane, context.CancelFunc)
+
 	DeriveWithTimeout(duration time.Duration) (Lane, context.CancelFunc)
 	DeriveWithTimeoutCause(duration time.Duration, cause error) (Lane, context.CancelFunc)
+	
 	DeriveReplaceContext(ctx OptionalContext) Lane
 
 	EnableStackTrace(level LaneLogLevel, enable bool) (wasEnabled bool)
@@ -70,7 +91,15 @@ Lane interface {
 }
 ```
 
-For the most part, application code will use the logging functions (Trace, Debug, ...).
+For the most part, application code will use the logging functions (`Trace`, `Debug`, ...).
+
+Each log level provides:
+
+* a `Sprint` version (ex: `Info` or `Error`)
+* a `Sprintf` version (ex: `Infof` or `Errorf`)
+* an object logger (ex: `InfoObject` or `ErrorObject`)
+
+The object logger will convert an object into JSON, including private fields.
 
 A correlation ID is provided via `LaneId()`, which is automatically inserted into the
 logged message.

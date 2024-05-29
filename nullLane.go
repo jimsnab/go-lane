@@ -83,30 +83,51 @@ func (nl *nullLane) Trace(args ...any) { nl.tee(func(l Lane) { l.Trace(args...) 
 func (nl *nullLane) Tracef(format string, args ...any) {
 	nl.tee(func(l Lane) { l.Tracef(format, args...) })
 }
+func (nl *nullLane) TraceObject(message string, obj any) {
+	LogObject(nl, LogLevelTrace, message, obj)
+}
 func (nl *nullLane) Debug(args ...any) { nl.tee(func(l Lane) { l.Debug(args...) }) }
 func (nl *nullLane) Debugf(format string, args ...any) {
 	nl.tee(func(l Lane) { l.Debugf(format, args...) })
+}
+func (nl *nullLane) DebugObject(message string, obj any) {
+	LogObject(nl, LogLevelDebug, message, obj)
 }
 func (nl *nullLane) Info(args ...any) { nl.tee(func(l Lane) { l.Info(args...) }) }
 func (nl *nullLane) Infof(format string, args ...any) {
 	nl.tee(func(l Lane) { l.Infof(format, args...) })
 }
+func (nl *nullLane) InfoObject(message string, obj any) {
+	LogObject(nl, LogLevelInfo, message, obj)
+}
 func (nl *nullLane) Warn(args ...any) { nl.tee(func(l Lane) { l.Warn(args...) }) }
 func (nl *nullLane) Warnf(format string, args ...any) {
 	nl.tee(func(l Lane) { l.Warnf(format, args...) })
+}
+func (nl *nullLane) WarnObject(message string, obj any) {
+	LogObject(nl, LogLevelWarn, message, obj)
 }
 func (nl *nullLane) Error(args ...any) { nl.tee(func(l Lane) { l.Error(args...) }) }
 func (nl *nullLane) Errorf(format string, args ...any) {
 	nl.tee(func(l Lane) { l.Errorf(format, args...) })
 }
+func (nl *nullLane) ErrorObject(message string, obj any) {
+	LogObject(nl, LogLevelError, message, obj)
+}
 func (nl *nullLane) PreFatal(args ...any) { nl.tee(func(l Lane) { l.PreFatal(args...) }) }
 func (nl *nullLane) PreFatalf(format string, args ...any) {
 	nl.tee(func(l Lane) { l.PreFatalf(format, args...) })
+}
+func (nl *nullLane) PreFatalObject(message string, obj any) {
+	LogObject(nl, logLevelPreFatal, message, obj)
 }
 func (nl *nullLane) Fatal(args ...any) { nl.PreFatal(args...); nl.onPanic() }
 func (nl *nullLane) Fatalf(format string, args ...any) {
 	nl.PreFatalf(format, args...)
 	nl.onPanic()
+}
+func (nl *nullLane) FatalObject(message string, obj any) {
+	LogObject(nl, LogLevelFatal, message, obj)
 }
 
 func (nl *nullLane) Logger() *log.Logger {
@@ -232,7 +253,7 @@ func (wnw *wrappedNullWriter) Write(p []byte) (n int, err error) {
 }
 
 func (nl *nullLane) Parent() Lane {
-	if nl.parent == nil {
+	if nl.parent != nil {
 		return nl.parent
 	}
 	return nil // untyped nil
