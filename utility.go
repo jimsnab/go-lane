@@ -42,7 +42,8 @@ func innerValue(val reflect.Value) any {
 	switch val.Kind() {
 	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-		reflect.Float32, reflect.Float64, reflect.String, reflect.Interface:
+		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.String,
+		reflect.Interface, reflect.Slice, reflect.Array, reflect.Chan, reflect.Func:
 		return val.Interface()
 	case reflect.Struct:
 		// convert to a map
@@ -71,6 +72,9 @@ func innerValue(val reflect.Value) any {
 		return m
 	case reflect.Pointer:
 		return innerValue(val.Elem())
+	case reflect.Invalid:
+		// zero value
+		return nil
 	}
 
 	panic("can't process type combination")

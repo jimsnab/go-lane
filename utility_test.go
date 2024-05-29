@@ -429,3 +429,24 @@ func TestLogObjectComposite2(t *testing.T) {
 		`composite: {"m":{"root":{"Link":{"m":{"child":{"Link":null,"name":"leaf"}}},"name":"child"}}}`,
 	})
 }
+
+func TestLogObjectComposite3(t *testing.T) {
+	l := NewLogLane(nil)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	m := map[string]any{}
+
+	m["chan"] = make(chan bool)
+	m["fn"] = TestLogObjectComposite3
+	m["array"] = [2]int{}
+	m["slice"] = []uint{}
+
+	l.InfoObject("composite", m)
+
+	testExpectedStdout(t, &buf, []string{
+		`composite: {"array":[0,0],"chan":"chan bool","fn":"github.com/jimsnab/go-lane.TestLogObjectComposite3","slice":[]}`,
+	})
+}

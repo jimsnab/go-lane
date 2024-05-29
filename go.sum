@@ -1,2 +1,4 @@
+bitbucket.nab.blueclouds.io/nas/cbfeed-go v0.0.0-20240523211834-70aaa97fe989 h1:ruE1IR/8jMzGXJewZyXzCOaKLQVZubZZ83xIp7xT1O0=
+bitbucket.nab.blueclouds.io/nas/cbfeed-go v0.0.0-20240523211834-70aaa97fe989/go.mod h1:/MdIi/cn8pt6EjveJgN2K9qrPR5ERPpxOuRXE1+5aM4=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
