@@ -458,10 +458,10 @@ func TestLogObjectByteSlice(t *testing.T) {
 	log.SetOutput(&buf)
 	defer func() { log.SetOutput(os.Stderr) }()
 
-	a := []byte("chicken\tcow\nlamb horse")
+	a := []byte("chicken\tcow\n\"lamb\" horse")
 	l.InfoObject("slice", a)
 
 	testExpectedStdout(t, &buf, []string{
-		`slice: "chicken\tcow\nlamb horse"`,
+		`slice: "chicken\tcow\n\"lamb\" horse"`,
 	})
 }
