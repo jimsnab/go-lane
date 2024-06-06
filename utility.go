@@ -5,7 +5,12 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
+	"strings"
 	"unsafe"
+)
+
+type (
+	asciiSequence []byte
 )
 
 func LogObject(l Lane, level LaneLogLevel, message string, obj any) {
@@ -107,6 +112,32 @@ func captureObject(obj any) (v any) {
 			a = append(a, captureObject(innerValue(r.Index(i))))
 		}
 
+		// special case for byte array/slice: if the values are all ascii, render the bytes as runes
+		if len(a) > 0 {
+			_, is := a[0].(byte)
+			if is {
+				seq := make(asciiSequence, 0, len(a))
+				runeable := true
+				for _, item := range a {
+					by := item.(byte)
+					if by < 32 {
+						if by != '\n' && by != '\r' && by != '\t' {
+							runeable = false
+							break
+						}
+					} else if by > 126 {
+						runeable = false
+						break
+					}
+					seq = append(seq, by)
+				}
+				if runeable {
+					v = seq
+					break
+				}
+			}
+		}
+
 		v = a
 
 	case reflect.Map, reflect.Struct:
@@ -114,4 +145,22 @@ func captureObject(obj any) (v any) {
 	}
 
 	return
+}
+
+func (seq asciiSequence) MarshalJSON() ([]byte, error) {
+	var sb strings.Builder
+	sb.WriteRune('"')
+	for _, by := range seq {
+		if by >= 32 {
+			sb.WriteByte(by)
+		} else if by == '\n' {
+			sb.WriteString(`\n`)
+		} else if by == '\r' {
+			sb.WriteString(`\r`)
+		} else if by == '\t' {
+			sb.WriteString(`\t`)
+		}
+	}
+	sb.WriteRune('"')
+	return []byte(sb.String()), nil
 }

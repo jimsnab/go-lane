@@ -450,3 +450,18 @@ func TestLogObjectComposite3(t *testing.T) {
 		`composite: {"array":[0,0],"chan":"chan bool","fn":"github.com/jimsnab/go-lane.TestLogObjectComposite3","slice":[]}`,
 	})
 }
+
+func TestLogObjectByteSlice(t *testing.T) {
+	l := NewLogLane(nil)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	a := []byte("chicken\tcow\nlamb horse")
+	l.InfoObject("slice", a)
+
+	testExpectedStdout(t, &buf, []string{
+		`slice: "chicken\tcow\nlamb horse"`,
+	})
+}
