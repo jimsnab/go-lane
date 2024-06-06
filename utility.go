@@ -125,7 +125,7 @@ func captureObject(obj any) (v any) {
 							runeable = false
 							break
 						}
-					} else if by == '"' {
+					} else if by == '"' || by == '\\' {
 						seq = append(seq, '\\')
 					} else if by > 126 {
 						runeable = false
