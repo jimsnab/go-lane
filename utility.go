@@ -13,9 +13,10 @@ type (
 	asciiSequence []byte
 )
 
+// Logs an entire object.
 func LogObject(l Lane, level LaneLogLevel, message string, obj any) {
 	// Convert the entire object (public and private values) to public
-	o := captureObject(obj)
+	o := CaptureObject(obj)
 
 	raw, err := json.Marshal(&o)
 	if err != nil {
@@ -43,7 +44,7 @@ func LogObject(l Lane, level LaneLogLevel, message string, obj any) {
 	}
 }
 
-func innerValue(val reflect.Value) any {
+func innerValue(val reflect.Value, addrs map[reflect.Value]struct{}) any {
 	switch val.Kind() {
 	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
@@ -61,7 +62,7 @@ func innerValue(val reflect.Value) any {
 			rf := val2.Field(i)
 			rf = reflect.NewAt(rf.Type(), unsafe.Pointer(rf.UnsafeAddr())).Elem()
 
-			m[val.Type().Field(i).Name] = innerValue(rf)
+			m[val.Type().Field(i).Name] = innerValue(rf, addrs)
 		}
 		return m
 	case reflect.Map:
@@ -72,11 +73,20 @@ func innerValue(val reflect.Value) any {
 		for iter.Next() {
 			rk := iter.Key()
 			rv := iter.Value()
-			m[fmt.Sprintf("%v", captureObject(innerValue(rk)))] = captureObject(innerValue(rv))
+			m[fmt.Sprintf("%v", captureObject(innerValue(rk, addrs), addrs))] = captureObject(innerValue(rv, addrs), addrs)
 		}
 		return m
 	case reflect.Pointer:
-		return innerValue(val.Elem())
+		elem := val.Elem()
+		if elem.CanAddr() {
+			addr := elem.Addr()
+			_, captured := addrs[addr]
+			if captured {
+				return "(recursive)"
+			}
+			addrs[addr] = struct{}{}
+		}
+		return innerValue(elem, addrs)
 	case reflect.Invalid:
 		// zero value
 		return nil
@@ -85,7 +95,13 @@ func innerValue(val reflect.Value) any {
 	panic("can't process type combination")
 }
 
-func captureObject(obj any) (v any) {
+// Converts an arbitrary object into a JSON-renderable object.
+func CaptureObject(obj any) (v any) {
+	addrs := map[reflect.Value]struct{}{}
+	return captureObject(obj, addrs)
+}
+
+func captureObject(obj any, addrs map[reflect.Value]struct{}) (v any) {
 	r := reflect.ValueOf(obj)
 	switch r.Kind() {
 	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
@@ -103,13 +119,13 @@ func captureObject(obj any) (v any) {
 		v = runtime.FuncForPC(r.Pointer()).Name()
 
 	case reflect.Interface, reflect.Pointer:
-		v = captureObject(innerValue(r))
+		v = captureObject(innerValue(r, addrs), addrs)
 
 	case reflect.Array, reflect.Slice:
 		a := []any{}
 
 		for i := 0; i < r.Len(); i++ {
-			a = append(a, captureObject(innerValue(r.Index(i))))
+			a = append(a, captureObject(innerValue(r.Index(i), addrs), addrs))
 		}
 
 		// special case for byte array/slice: if the values are all ascii, render the bytes as runes
@@ -143,7 +159,7 @@ func captureObject(obj any) (v any) {
 		v = a
 
 	case reflect.Map, reflect.Struct:
-		v = innerValue(r)
+		v = innerValue(r, addrs)
 	}
 
 	return

@@ -20,6 +20,11 @@ type (
 	testStruct3 struct {
 		m map[string]*testStruct2
 	}
+
+	testRecursive struct {
+		name string
+		next *testRecursive
+	}
 )
 
 var objLineExp = regexp.MustCompile(`\d{4}\/\d\d\/\d\d \d\d:\d\d:\d\d [A-Z]+ \{[a-z0-9]{10}\} (.*)\n`)
@@ -463,5 +468,28 @@ func TestLogObjectByteSlice(t *testing.T) {
 
 	testExpectedStdout(t, &buf, []string{
 		`slice: "chicken\tcow\n\"lamb\" \\\"horse\\\""`,
+	})
+}
+
+func TestLogObjectRecursive(t *testing.T) {
+	l := NewLogLane(nil)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	n1 := testRecursive{name: "n1"}
+	n2 := testRecursive{name: "n2..n1", next: &n1}
+	n3 := testRecursive{name: "n3..n3"}
+	n3.next = &n3
+
+	l.InfoObject("n1", &n1)
+	l.InfoObject("n2", &n2)
+	l.InfoObject("n3", &n3)
+
+	testExpectedStdout(t, &buf, []string{
+		`n1: {"name":"n1","next":null}`,
+		`n2: {"name":"n2..n1","next":{"name":"n1","next":null}}`,
+		`n3: {"name":"n3..n3","next":"(recursive)"}`,
 	})
 }

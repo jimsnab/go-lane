@@ -119,6 +119,13 @@ Another lane can "tee" from a source lane. For example, it might be desired to t
 testing lane from a logging lane, and then a unit test can verify certain log messages
 occur during the test.
 
+Two utility functions are available:
+
+* `lane.LogObject` provides access to the common implementation of `InfoObject`, `InfoError`, etc.
+* `lane.CaptureObject` exposes the function that turns an object into one that can be
+  used with `json.Marshal` without losing private data. It does not retain `json`
+  type annotations however.
+
 # Types of Lanes
 
 - `NewLogLane` log messages go to the standard Go `log` infrastructure. Access the `log`
