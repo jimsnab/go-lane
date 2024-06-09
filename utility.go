@@ -3,6 +3,7 @@ package lane
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"reflect"
 	"runtime"
 	"strings"
@@ -44,13 +45,90 @@ func LogObject(l Lane, level LaneLogLevel, message string, obj any) {
 	}
 }
 
-func innerValue(val reflect.Value, addrs map[reflect.Value]struct{}) any {
+func captureAddrs(val reflect.Value, addrs map[uintptr]int) (showAddrs bool) {
+	if val.CanAddr() {
+		addr := val.Addr().Pointer()
+		n := addrs[addr]
+		if n == 0 {
+			addrs[addr] = 1
+		} else if n == 1 {
+			showAddrs = true
+			return
+		}
+	}
+
+	switch val.Kind() {
+	case reflect.Interface, reflect.Pointer:
+		showAddrs = captureAddrs(val.Elem(), addrs) || showAddrs
+
+	case reflect.Struct:
+		val2 := reflect.New(val.Type()).Elem()
+		val2.Set(val)
+
+		for i := 0; i < val.NumField(); i++ {
+			rf := val2.Field(i)
+			rf = reflect.NewAt(rf.Type(), unsafe.Pointer(rf.UnsafeAddr())).Elem()
+
+			showAddrs = captureAddrs(rf, addrs) || showAddrs
+		}
+
+	case reflect.Array, reflect.Slice:
+		for i := 0; i < val.Len(); i++ {
+			showAddrs = captureAddrs(val.Index(i), addrs) || showAddrs
+		}
+
+	case reflect.Map:
+		iter := val.MapRange()
+		for iter.Next() {
+			rk := iter.Key()
+			rv := iter.Value()
+			showAddrs = captureAddrs(rk, addrs) || showAddrs
+			showAddrs = captureAddrs(rv, addrs) || showAddrs
+		}
+	}
+
+	return
+}
+
+func innerValue(val reflect.Value, addrs map[uintptr]int) (inner any) {
+
+	if addrs != nil {
+		if val.CanAddr() {
+			addr := val.Addr().Pointer()
+			rendered := addrs[addr]
+			if rendered == 2 {
+				return fmt.Sprintf("(recursive: %#x)", addr)
+			}
+			addrs[addr] = 2
+		}
+	}
+
 	switch val.Kind() {
 	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.String,
-		reflect.Interface, reflect.Slice, reflect.Array, reflect.Chan, reflect.Func:
-		return val.Interface()
+		reflect.String:
+		inner = val.Interface()
+
+	case reflect.Float32, reflect.Float64:
+		f64 := val.Float()
+		if math.IsInf(f64, 0) {
+			inner = fmt.Sprintf("%v", f64)
+		} else {
+			inner = val.Interface()
+		}
+
+	case reflect.Complex64:
+		inner = fmt.Sprintf("%v", complex64(val.Complex()))
+
+	case reflect.Complex128:
+		inner = fmt.Sprintf("%v", val.Complex())
+
+	case reflect.Chan:
+		inner = fmt.Sprintf("%T", val.Interface())
+
+	case reflect.Func:
+		inner = runtime.FuncForPC(val.Pointer()).Name()
+
 	case reflect.Struct:
 		// convert to a map
 		m := map[string]any{}
@@ -64,68 +142,13 @@ func innerValue(val reflect.Value, addrs map[reflect.Value]struct{}) any {
 
 			m[val.Type().Field(i).Name] = innerValue(rf, addrs)
 		}
-		return m
-	case reflect.Map:
-		// generalize map
-		m := map[string]any{}
-
-		iter := val.MapRange()
-		for iter.Next() {
-			rk := iter.Key()
-			rv := iter.Value()
-			m[fmt.Sprintf("%v", captureObject(innerValue(rk, addrs), addrs))] = captureObject(innerValue(rv, addrs), addrs)
-		}
-		return m
-	case reflect.Pointer:
-		elem := val.Elem()
-		if elem.CanAddr() {
-			addr := elem.Addr()
-			_, captured := addrs[addr]
-			if captured {
-				return "(recursive)"
-			}
-			addrs[addr] = struct{}{}
-		}
-		return innerValue(elem, addrs)
-	case reflect.Invalid:
-		// zero value
-		return nil
-	}
-
-	panic("can't process type combination")
-}
-
-// Converts an arbitrary object into a JSON-renderable object.
-func CaptureObject(obj any) (v any) {
-	addrs := map[reflect.Value]struct{}{}
-	return captureObject(obj, addrs)
-}
-
-func captureObject(obj any, addrs map[reflect.Value]struct{}) (v any) {
-	r := reflect.ValueOf(obj)
-	switch r.Kind() {
-	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-		reflect.Float32, reflect.Float64, reflect.String:
-		v = obj
-
-	case reflect.Complex64, reflect.Complex128:
-		v = fmt.Sprintf("%v", obj)
-
-	case reflect.Chan:
-		v = fmt.Sprintf("%T", obj)
-
-	case reflect.Func:
-		v = runtime.FuncForPC(r.Pointer()).Name()
-
-	case reflect.Interface, reflect.Pointer:
-		v = captureObject(innerValue(r, addrs), addrs)
+		inner = m
 
 	case reflect.Array, reflect.Slice:
 		a := []any{}
 
-		for i := 0; i < r.Len(); i++ {
-			a = append(a, captureObject(innerValue(r.Index(i), addrs), addrs))
+		for i := 0; i < val.Len(); i++ {
+			a = append(a, innerValue(val.Index(i), addrs))
 		}
 
 		// special case for byte array/slice: if the values are all ascii, render the bytes as runes
@@ -150,19 +173,56 @@ func captureObject(obj any, addrs map[reflect.Value]struct{}) (v any) {
 					seq = append(seq, by)
 				}
 				if runeable {
-					v = seq
+					inner = seq
 					break
 				}
 			}
 		}
 
-		v = a
+		inner = a
 
-	case reflect.Map, reflect.Struct:
-		v = innerValue(r, addrs)
+	case reflect.Map:
+		// generalize map
+		m := map[string]any{}
+
+		iter := val.MapRange()
+		for iter.Next() {
+			rk := iter.Key()
+			rv := iter.Value()
+			m[fmt.Sprintf("%v", innerValue(rk, addrs))] = innerValue(rv, addrs)
+		}
+		inner = m
+	case reflect.Interface, reflect.Pointer:
+		inner = innerValue(val.Elem(), addrs)
+
+	case reflect.Invalid:
+		// zero value
+		break
+
+	default:
+		panic("can't process type combination")
+	}
+
+	if addrs != nil {
+		if val.CanAddr() {
+			m, is := inner.(map[string]any)
+			if is {
+				m[""] = fmt.Sprintf("Address: %#x", val.Addr().Pointer())
+			}
+		}
 	}
 
 	return
+}
+
+// Converts an arbitrary object into a JSON-renderable object.
+func CaptureObject(obj any) (v any) {
+	addrs := map[uintptr]int{}
+	val := reflect.ValueOf(obj)
+	if !captureAddrs(val, addrs) {
+		addrs = nil
+	}
+	return innerValue(val, addrs)
 }
 
 func (seq asciiSequence) MarshalJSON() ([]byte, error) {

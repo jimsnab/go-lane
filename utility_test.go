@@ -3,8 +3,10 @@ package lane
 import (
 	"bytes"
 	"log"
+	"math"
 	"os"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -32,15 +34,26 @@ var objLineExp = regexp.MustCompile(`\d{4}\/\d\d\/\d\d \d\d:\d\d:\d\d [A-Z]+ \{[
 func testExpectedStdout(t *testing.T, buf *bytes.Buffer, expected []string) {
 	capture := buf.String()
 
-	matches := objLineExp.FindAllStringSubmatch(capture, -1)
-	if len(matches) != len(expected) {
-		t.Fatalf("expected %d lines, got %d", len(expected), len(matches))
+	var addrText string
+	addr := strings.Index(capture, `"":"Address: 0x`)
+	if addr >= 0 {
+		addr += 15
+		length := strings.Index(capture[addr:], `"`)
+		if length > 0 {
+			addrText = "0x" + capture[addr:addr+length]
+		}
 	}
 
+	matches := objLineExp.FindAllStringSubmatch(capture, -1)
 	for i, expectation := range expected {
+		if i >= len(matches) {
+			t.Fatalf("expected %d lines, got %d", len(expected), len(matches))
+		}
 		match := matches[i]
-		if match[1] != expectation {
-			t.Errorf("expected '%s', got '%s'", expectation, match[1])
+
+		replaced := strings.ReplaceAll(expectation, "**addr**", addrText)
+		if match[1] != replaced {
+			t.Errorf("expected '%s', got '%s'", replaced, match[1])
 		}
 	}
 }
@@ -490,6 +503,44 @@ func TestLogObjectRecursive(t *testing.T) {
 	testExpectedStdout(t, &buf, []string{
 		`n1: {"name":"n1","next":null}`,
 		`n2: {"name":"n2..n1","next":{"name":"n1","next":null}}`,
-		`n3: {"name":"n3..n3","next":"(recursive)"}`,
+		`n3: {"":"Address: **addr**","name":"n3..n3","next":"(recursive: **addr**)"}`,
+	})
+}
+
+func TestLogObjectInf(t *testing.T) {
+	l := NewLogLane(nil)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	a := math.Inf(1)
+	l.InfoObject("inf", a)
+
+	a = math.Inf(-1)
+	l.InfoObject("inf", a)
+
+	testExpectedStdout(t, &buf, []string{
+		`inf: "+Inf"`,
+		`inf: "-Inf"`,
+	})
+}
+
+func TestLogObjectComplex(t *testing.T) {
+	l := NewLogLane(nil)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	a := complex64(1)
+	l.InfoObject("c64", a)
+
+	b := complex128(10 + .3i)
+	l.InfoObject("c128", b)
+
+	testExpectedStdout(t, &buf, []string{
+		`c64: "(1+0i)"`,
+		`c128: "(10+0.3i)"`,
 	})
 }
