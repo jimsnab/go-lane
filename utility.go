@@ -193,11 +193,14 @@ func innerValue(val reflect.Value, addrs map[uintptr]recursionType) (inner any) 
 			} else {
 				// large byte array - render as base64
 				bytes := make([]byte, 0, len(a))
-				for _, item := range a {
-					bytes = append(bytes, item.(byte))
+				_, is := a[0].(byte)
+				if is {
+					for _, item := range a {
+						bytes = append(bytes, item.(byte))
+					}
+					inner = base64.StdEncoding.EncodeToString(bytes)
+					break
 				}
-				inner = base64.StdEncoding.EncodeToString(bytes)
-				break
 			}
 		}
 
