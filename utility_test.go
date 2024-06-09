@@ -27,6 +27,11 @@ type (
 		name string
 		next *testRecursive
 	}
+
+	testRecursiveAny struct {
+		name string
+		next any
+	}
 )
 
 var objLineExp = regexp.MustCompile(`\d{4}\/\d\d\/\d\d \d\d:\d\d:\d\d [A-Z]+ \{[a-z0-9]{10}\} (.*)\n`)
@@ -534,6 +539,23 @@ func TestLogObjectRecursive2(t *testing.T) {
 		`n1: {"":"Address: **addr**","name":"n1..n2","next":{"name":"n2..n3","next":{"name":"n3..n1","next":"(pointer: **addr**)"}}}`,
 		`n2: {"":"Address: **addr**","name":"n2..n3","next":{"name":"n3..n1","next":{"name":"n1..n2","next":"(pointer: **addr**)"}}}`,
 		`n3: {"":"Address: **addr**","name":"n3..n1","next":{"name":"n1..n2","next":{"name":"n2..n3","next":"(pointer: **addr**)"}}}`,
+	})
+}
+
+func TestLogObjectRecursiveAny(t *testing.T) {
+	l := NewLogLane(nil)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	n1 := testRecursiveAny{name: "n1..n1"}
+	n1.next = &n1
+
+	l.InfoObject("n1", &n1)
+
+	testExpectedStdout(t, &buf, []string{
+		`n1: {"":"Address: **addr**","name":"n1..n1","next":"(pointer: **addr**)"}`,
 	})
 }
 

@@ -18,9 +18,9 @@ type (
 
 const (
 	recursionNone recursionType = iota
-	recursionSuspected
-	recursionNotRendered
-	recursionRendered
+	recursionPossible
+	recursionFirst
+	recursionWasRendered
 )
 
 // Logs an entire object.
@@ -55,14 +55,22 @@ func LogObject(l Lane, level LaneLogLevel, message string, obj any) {
 }
 
 func captureAddrs(val reflect.Value, addrs map[uintptr]recursionType) (showAddrs bool) {
-	if val.CanAddr() {
-		addr := val.Addr().Pointer()
+	var addr uintptr
+	if val.Kind() == reflect.Pointer {
+		addr = val.Pointer()
+	} else if val.Kind() == reflect.UnsafePointer {
+		addr = val.UnsafeAddr()
+	}
+
+	if addr != 0 {
 		n := addrs[addr]
 		if n == recursionNone {
-			addrs[addr] = recursionSuspected
-		} else if n == recursionSuspected {
-			addrs[addr] = recursionNotRendered
+			addrs[addr] = recursionPossible
+		} else {
 			showAddrs = true
+			if n == recursionPossible {
+				addrs[addr] = recursionFirst
+			}
 			return
 		}
 	}
@@ -72,14 +80,9 @@ func captureAddrs(val reflect.Value, addrs map[uintptr]recursionType) (showAddrs
 		showAddrs = captureAddrs(val.Elem(), addrs) || showAddrs
 
 	case reflect.Struct:
-		val2 := reflect.New(val.Type()).Elem()
-		val2.Set(val)
-
 		for i := 0; i < val.NumField(); i++ {
-			rf := val2.Field(i)
-			rf = reflect.NewAt(rf.Type(), unsafe.Pointer(rf.UnsafeAddr())).Elem()
-
-			showAddrs = captureAddrs(rf, addrs) || showAddrs
+			f := val.Field(i)
+			showAddrs = captureAddrs(f, addrs) || showAddrs
 		}
 
 	case reflect.Array, reflect.Slice:
@@ -102,15 +105,22 @@ func captureAddrs(val reflect.Value, addrs map[uintptr]recursionType) (showAddrs
 
 func innerValue(val reflect.Value, addrs map[uintptr]recursionType) (inner any) {
 
-	var recursion recursionType
+	var pointerTarget uintptr
 	if addrs != nil {
-		if val.CanAddr() {
-			addr := val.Addr().Pointer()
-			recursion = addrs[addr]
-			if recursion == recursionRendered {
-				return fmt.Sprintf("(pointer: %#x)", addr)
-			} else if recursion == recursionNotRendered {
-				addrs[addr] = recursionRendered
+		if val.Kind() == reflect.Pointer {
+			pointerTarget = val.Pointer()
+		} else if val.Kind() == reflect.UnsafePointer {
+			pointerTarget = val.UnsafeAddr()
+		}
+
+		if pointerTarget != 0 {
+			recursion := addrs[pointerTarget]
+			if recursion == recursionWasRendered {
+				return fmt.Sprintf("(pointer: %#x)", pointerTarget)
+			} else if recursion == recursionFirst {
+				addrs[pointerTarget] = recursionWasRendered
+			} else {
+				pointerTarget = 0
 			}
 		}
 	}
@@ -228,10 +238,10 @@ func innerValue(val reflect.Value, addrs map[uintptr]recursionType) (inner any) 
 		panic("can't process type combination")
 	}
 
-	if recursion == recursionNotRendered {
+	if pointerTarget != 0 {
 		m, is := inner.(map[string]any)
 		if is {
-			m[""] = fmt.Sprintf("Address: %#x", val.Addr().Pointer())
+			m[""] = fmt.Sprintf("Address: %#x", pointerTarget)
 		}
 	}
 
