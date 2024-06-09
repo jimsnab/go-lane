@@ -1,6 +1,7 @@
 package lane
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -153,29 +154,39 @@ func innerValue(val reflect.Value, addrs map[uintptr]int) (inner any) {
 
 		// special case for byte array/slice: if the values are all ascii, render the bytes as runes
 		if len(a) > 0 {
-			_, is := a[0].(byte)
-			if is {
-				seq := make(asciiSequence, 0, len(a))
-				runeable := true
-				for _, item := range a {
-					by := item.(byte)
-					if by < 32 {
-						if by != '\n' && by != '\r' && by != '\t' {
+			if len(a) < 1000 {
+				_, is := a[0].(byte)
+				if is {
+					seq := make(asciiSequence, 0, len(a))
+					runeable := true
+					for _, item := range a {
+						by := item.(byte)
+						if by < 32 {
+							if by != '\n' && by != '\r' && by != '\t' {
+								runeable = false
+								break
+							}
+						} else if by == '"' || by == '\\' {
+							seq = append(seq, '\\')
+						} else if by > 126 {
 							runeable = false
 							break
 						}
-					} else if by == '"' || by == '\\' {
-						seq = append(seq, '\\')
-					} else if by > 126 {
-						runeable = false
+						seq = append(seq, by)
+					}
+					if runeable {
+						inner = seq
 						break
 					}
-					seq = append(seq, by)
 				}
-				if runeable {
-					inner = seq
-					break
+			} else {
+				// large byte array - render as base64
+				bytes := make([]byte, 0, len(a))
+				for _, item := range a {
+					bytes = append(bytes, item.(byte))
 				}
+				inner = base64.StdEncoding.EncodeToString(bytes)
+				break
 			}
 		}
 
