@@ -34,27 +34,32 @@ var objLineExp = regexp.MustCompile(`\d{4}\/\d\d\/\d\d \d\d:\d\d:\d\d [A-Z]+ \{[
 func testExpectedStdout(t *testing.T, buf *bytes.Buffer, expected []string) {
 	capture := buf.String()
 
-	var addrText string
-	addr := strings.Index(capture, `"":"Address: 0x`)
-	if addr >= 0 {
-		addr += 15
-		length := strings.Index(capture[addr:], `"`)
-		if length > 0 {
-			addrText = "0x" + capture[addr:addr+length]
-		}
-	}
-
 	matches := objLineExp.FindAllStringSubmatch(capture, -1)
 	for i, expectation := range expected {
 		if i >= len(matches) {
-			t.Fatalf("expected %d lines, got %d", len(expected), len(matches))
+			break
 		}
 		match := matches[i]
 
-		replaced := strings.ReplaceAll(expectation, "**addr**", addrText)
-		if match[1] != replaced {
-			t.Errorf("expected '%s', got '%s'", replaced, match[1])
+		var addrText string
+		matchText := match[1]
+		addr := strings.Index(matchText, `"":"Address: 0x`)
+		if addr >= 0 {
+			addr += 15
+			length := strings.Index(matchText[addr:], `"`)
+			if length > 0 {
+				addrText = "0x" + matchText[addr:addr+length]
+			}
 		}
+
+		replaced := strings.ReplaceAll(expectation, "**addr**", addrText)
+		if matchText != replaced {
+			t.Errorf("expected '%s', got '%s'", replaced, matchText)
+		}
+	}
+
+	if len(expected) != len(matches) {
+		t.Fatalf("expected %d lines, got %d", len(expected), len(matches))
 	}
 }
 
@@ -503,7 +508,32 @@ func TestLogObjectRecursive(t *testing.T) {
 	testExpectedStdout(t, &buf, []string{
 		`n1: {"name":"n1","next":null}`,
 		`n2: {"name":"n2..n1","next":{"name":"n1","next":null}}`,
-		`n3: {"":"Address: **addr**","name":"n3..n3","next":"(recursive: **addr**)"}`,
+		`n3: {"":"Address: **addr**","name":"n3..n3","next":"(pointer: **addr**)"}`,
+	})
+}
+
+func TestLogObjectRecursive2(t *testing.T) {
+	l := NewLogLane(nil)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	n1 := testRecursive{name: "n1..n2"}
+	n2 := testRecursive{name: "n2..n3"}
+	n3 := testRecursive{name: "n3..n1"}
+	n1.next = &n2
+	n2.next = &n3
+	n3.next = &n1
+
+	l.InfoObject("n1", &n1)
+	l.InfoObject("n2", &n2)
+	l.InfoObject("n3", &n3)
+
+	testExpectedStdout(t, &buf, []string{
+		`n1: {"":"Address: **addr**","name":"n1..n2","next":{"name":"n2..n3","next":{"name":"n3..n1","next":"(pointer: **addr**)"}}}`,
+		`n2: {"":"Address: **addr**","name":"n2..n3","next":{"name":"n3..n1","next":{"name":"n1..n2","next":"(pointer: **addr**)"}}}`,
+		`n3: {"":"Address: **addr**","name":"n3..n1","next":{"name":"n1..n2","next":{"name":"n2..n3","next":"(pointer: **addr**)"}}}`,
 	})
 }
 

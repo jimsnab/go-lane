@@ -13,6 +13,14 @@ import (
 
 type (
 	asciiSequence []byte
+	recursionType int
+)
+
+const (
+	recursionNone recursionType = iota
+	recursionSuspected
+	recursionNotRendered
+	recursionRendered
 )
 
 // Logs an entire object.
@@ -46,13 +54,14 @@ func LogObject(l Lane, level LaneLogLevel, message string, obj any) {
 	}
 }
 
-func captureAddrs(val reflect.Value, addrs map[uintptr]int) (showAddrs bool) {
+func captureAddrs(val reflect.Value, addrs map[uintptr]recursionType) (showAddrs bool) {
 	if val.CanAddr() {
 		addr := val.Addr().Pointer()
 		n := addrs[addr]
-		if n == 0 {
-			addrs[addr] = 1
-		} else if n == 1 {
+		if n == recursionNone {
+			addrs[addr] = recursionSuspected
+		} else if n == recursionSuspected {
+			addrs[addr] = recursionNotRendered
 			showAddrs = true
 			return
 		}
@@ -91,16 +100,18 @@ func captureAddrs(val reflect.Value, addrs map[uintptr]int) (showAddrs bool) {
 	return
 }
 
-func innerValue(val reflect.Value, addrs map[uintptr]int) (inner any) {
+func innerValue(val reflect.Value, addrs map[uintptr]recursionType) (inner any) {
 
+	var recursion recursionType
 	if addrs != nil {
 		if val.CanAddr() {
 			addr := val.Addr().Pointer()
-			rendered := addrs[addr]
-			if rendered == 2 {
-				return fmt.Sprintf("(recursive: %#x)", addr)
+			recursion = addrs[addr]
+			if recursion == recursionRendered {
+				return fmt.Sprintf("(pointer: %#x)", addr)
+			} else if recursion == recursionNotRendered {
+				addrs[addr] = recursionRendered
 			}
-			addrs[addr] = 2
 		}
 	}
 
@@ -214,12 +225,10 @@ func innerValue(val reflect.Value, addrs map[uintptr]int) (inner any) {
 		panic("can't process type combination")
 	}
 
-	if addrs != nil {
-		if val.CanAddr() {
-			m, is := inner.(map[string]any)
-			if is {
-				m[""] = fmt.Sprintf("Address: %#x", val.Addr().Pointer())
-			}
+	if recursion == recursionNotRendered {
+		m, is := inner.(map[string]any)
+		if is {
+			m[""] = fmt.Sprintf("Address: %#x", val.Addr().Pointer())
 		}
 	}
 
@@ -228,7 +237,7 @@ func innerValue(val reflect.Value, addrs map[uintptr]int) (inner any) {
 
 // Converts an arbitrary object into a JSON-renderable object.
 func CaptureObject(obj any) (v any) {
-	addrs := map[uintptr]int{}
+	addrs := map[uintptr]recursionType{}
 	val := reflect.ValueOf(obj)
 	if !captureAddrs(val, addrs) {
 		addrs = nil
