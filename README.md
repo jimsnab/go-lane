@@ -2,6 +2,16 @@
 
 A "lane" is a context that has logging associated. It is a melding of Go's `log` and its `context`.
 
+A lane is intended to be passed into everything, and used like a regular `context` for patterns such as cancelation, and also used for logging in place of `log`.
+
+The logging interface provides several tools for rich diagnostics, including 
+correlation IDs, stack traces, easy logging of structs including private members, 
+log capturing for test verification, recording data differences between two structs, 
+and more.
+
+Sister projects adapt logs to unify them into one logging solution, such as [go-lane-gin](https://github.com/jimsnab/go-lane-gin) and
+[go-lane-opensearch](https://github.com/jimsnab/go-lane-opensearch).
+
 # Basic Use
 
 ```go
@@ -28,6 +38,7 @@ func someFunc(l lane.Lane) {
 
 # Interface
 
+## Lane Instance
 ```go
 Lane interface {
 	context.Context
@@ -119,12 +130,38 @@ Another lane can "tee" from a source lane. For example, it might be desired to t
 testing lane from a logging lane, and then a unit test can verify certain log messages
 occur during the test.
 
-Two utility functions are available:
+## Utility Functions
 
-* `lane.LogObject` provides access to the common implementation of `InfoObject`, `InfoError`, etc.
-* `lane.CaptureObject` exposes the function that turns an object into one that can be
-  used with `json.Marshal` without losing private data. It does not retain `json`
-  type annotations however.
+### LogObject
+`lane.LogObject` provides access to the common implementation of `InfoObject`, `InfoError`, etc., for implementing extended lane types.
+
+### CaptureObject
+`lane.CaptureObject` exposes the function that turns an object into one that can be
+used with `json.Marshal` without losing private data. It does not retain `json`
+type annotations however.
+
+### DiffObject
+`lane.DiffObject` returns a string that describes the differences between two objects,
+or an empty string if the objects are identical.
+
+For example, assume a and b are instances of a street address struct, and are
+passed into a function like this:
+
+```go
+func compare(l lane.Lane, a, b any) {
+	if !reflect.DeepEqual(a, b) {
+		l.Infof("address change: %s", lane.DiffObject(a, b))
+	}
+}
+```
+
+Assume street addresses a and b are different. The log output will look something like this:
+
+```
+2024/07/11 13:20:26 INFO {e87ed2b1ed} address change: [Address: "2727 S Parker Rd" -> "407 Weston St"][City: "Dallas" -> "Kirby"][Zip: "75233" -> "78219"]
+```
+
+Only the changed fields are logged. Notice Texas is not shown in the change.
 
 # Types of Lanes
 
