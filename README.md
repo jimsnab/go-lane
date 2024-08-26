@@ -230,5 +230,5 @@ The parent lane (which is a `context`) is also available by calling `Lane.Parent
 	fmt.Printf("lOne %s == lTwo's parent %v\n", lOne.LaneId(), lTwo.Value(lane.ParentLaneIdKey))
 	
 	lThree := lTwo.Parent()
-	fmt.Printf("lOne %s == lThree %s\n", lOne.Lane(), lThree.LaneId())
+	fmt.Printf("lOne %s == lThree %s\n", lOne.LaneId(), lThree.LaneId())
 ```
