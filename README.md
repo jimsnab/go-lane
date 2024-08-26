@@ -133,7 +133,7 @@ occur during the test.
 ## Utility Functions
 
 ### LogObject
-`lane.LogObject` provides access to the common implementation of `InfoObject`, `InfoError`, etc., for implementing extended lane types.
+`lane.LogObject` provides access to the common implementation of `InfoObject`, `ErrorObject`, etc., for implementing extended lane types.
 
 ### CaptureObject
 `lane.CaptureObject` exposes the function that turns an object into one that can be
