@@ -14,6 +14,7 @@ const (
 	LogLevelError
 	LogLevelFatal
 	logLevelPreFatal
+	LogLevelStack
 )
 
 type (
@@ -95,6 +96,12 @@ type (
 		Fatalf(format string, args ...any)
 		// Fatal error, intended for details about why an application can't continue and must terminate. Messages formated with fmt.Sprintf(). Object [obj] is converted to JSON, including private fields, and concatenated to [message].
 		FatalObject(message string, obj any)
+
+		// Logs the stack
+		LogStack(message string)
+
+		// Logs the stack, trimming the top of the stack by the number of [skippedCallers] specified
+		LogStackTrim(message string, skippedCallers int)
 
 		// Exposes access to the underlying log object.
 		Logger() *log.Logger

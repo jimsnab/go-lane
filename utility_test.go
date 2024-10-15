@@ -2,6 +2,7 @@ package lane
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"math"
 	"os"
@@ -198,6 +199,10 @@ func TestTestingLaneObject(t *testing.T) {
 	l2 := NewLogLane(nil)
 	l.AddTee(l2)
 
+	// turn off stack on error
+	l.EnableStackTrace(LogLevelError, false)
+	l2.EnableStackTrace(LogLevelError, false)
+
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
 	defer func() { log.SetOutput(os.Stderr) }()
@@ -242,6 +247,7 @@ FATAL	pre-fatal: 128
 FATAL	fatal: 129`)
 
 	if !verified {
+		fmt.Println(l.EventsToString())
 		t.Error("test lane does not have expected events")
 	}
 }
@@ -634,4 +640,563 @@ func TestLogObjectLargeByteArray(t *testing.T) {
 			`a2xtbm9wcXJzdHV2d3h5ent8fX5/gIGCg4SFhoeIiYqLjI2Oj5CRkpOUlZaXmJmam5ydnp+goaKjpKWmp6ipqqusra6vsLGys7S1tre4ubq7vL2+v8DBwsPExcbHyMn` +
 			`Ky8zNzs/Q0dLT1NXW19jZ2tvc3d7f4OHi4+Tl5ufo6err7O3u7/Dx8vP09fb3+Pn6+/z9/v8="`,
 	})
+}
+
+func TestLogLaneLogStackDirect(t *testing.T) {
+	l := NewLogLane(nil)
+	l2 := NewLogLane(nil)
+	l.AddTee(l2)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	l.LogStack("")
+
+	lines := strings.Split(buf.String(), "\n")
+	if len(lines) < 8 {
+		t.Fatal("insufficient stack")
+	}
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		if !strings.Contains(line, " STACK ") {
+			t.Errorf("unexpected line: %s", line)
+		}
+
+		if strings.Contains(line, "logLane.go") {
+			t.Errorf("skipped stack included: %s", line)
+		}
+	}
+
+	if !strings.Contains(lines[0], "TestLogLaneLogStackDirect") {
+		t.Errorf("unexpected top of stack: %s", lines[0])
+	}
+
+	middle := len(lines) / 2
+	for i := 0; i < middle; i += 2 {
+		first := strings.Split(lines[i], "}")
+		second := strings.Split(lines[middle+i], "}")
+		if first[1] != second[1] {
+			t.Errorf("tee is not identical")
+		}
+	}
+}
+
+func TestLogLaneLogStackDirect2(t *testing.T) {
+	l := NewLogLane(nil)
+	l2 := NewLogLane(nil)
+	l.AddTee(l2)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	l.LogStack("foo")
+
+	lines := strings.Split(buf.String(), "\n")
+	if len(lines) < 11 {
+		t.Fatal("insufficient stack")
+	}
+
+	if lines[len(lines)-1] != "" {
+		t.Fatal("expected trailing blank line in stdout")
+	}
+	lines = lines[:len(lines)-1]
+
+	for _, line := range lines {
+		if !strings.Contains(line, " STACK ") {
+			t.Errorf("unexpected line: %s", line)
+		}
+
+		if strings.Contains(line, "logLane.go") {
+			t.Errorf("skipped stack included: %s", line)
+		}
+	}
+
+	if !strings.Contains(lines[0], " foo") {
+		t.Errorf("missing message: %s", lines[0])
+	}
+
+	if !strings.Contains(lines[1], "TestLogLaneLogStackDirect") {
+		t.Errorf("unexpected top of stack: %s", lines[1])
+	}
+
+	middle := len(lines) / 2
+	if !strings.Contains(lines[middle], " foo") {
+		t.Fatal("message doesn't match")
+	}
+
+	lines = append(lines[1:middle], lines[middle+1:]...)
+	middle--
+
+	for i := 0; i < middle; i += 2 {
+		first := strings.Split(lines[i], "}")
+		second := strings.Split(lines[middle+i], "}")
+		if first[1] != second[1] {
+			t.Errorf("tee is not identical")
+		}
+	}
+}
+
+func TestLogLaneLogStackDirect3(t *testing.T) {
+	l := NewLogLane(nil)
+	l2 := NewLogLane(nil)
+	l.AddTee(l2)
+	l3 := NewLogLane(nil)
+	l.AddTee(l3)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	l.LogStack("")
+
+	lines := strings.Split(buf.String(), "\n")
+	if len(lines) < 12 {
+		t.Fatal("insufficient stack")
+	}
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		if !strings.Contains(line, " STACK ") {
+			t.Errorf("unexpected line: %s", line)
+		}
+
+		if strings.Contains(line, "logLane.go") {
+			t.Errorf("skipped stack included: %s", line)
+		}
+	}
+
+	if !strings.Contains(lines[0], "TestLogLaneLogStackDirect3") {
+		t.Errorf("unexpected top of stack: %s", lines[0])
+	}
+
+	oneThird := len(lines) / 3
+	twoThirds := oneThird * 2
+	for i := 0; i < oneThird; i += 2 {
+		first := strings.Split(lines[i], "}")
+		second := strings.Split(lines[oneThird+i], "}")
+		if first[1] != second[1] {
+			t.Errorf("tee is not identical")
+		}
+		third := strings.Split(lines[twoThirds+i], "}")
+		if first[1] != third[1] {
+			t.Errorf("tee 2 is not identical")
+		}
+	}
+}
+
+func TestNullLaneLogStackDirect(t *testing.T) {
+	l := NewNullLane(nil)
+	l2 := NewLogLane(nil)
+	l.AddTee(l2)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	l.LogStack("")
+
+	lines := strings.Split(buf.String(), "\n")
+	if len(lines) < 4 {
+		t.Fatal("insufficient stack")
+	}
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		if !strings.Contains(line, " STACK ") {
+			t.Errorf("unexpected line: %s", line)
+		}
+	}
+
+	if !strings.Contains(lines[0], "TestNullLaneLogStackDirect") {
+		t.Errorf("unexpected top of stack: %s", lines[0])
+	}
+}
+
+func TestNullLaneLogStackDirect2(t *testing.T) {
+	l := NewNullLane(nil)
+	l2 := NewLogLane(nil)
+	l.AddTee(l2)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	l.LogStack("foo")
+
+	lines := strings.Split(buf.String(), "\n")
+	if len(lines) < 4 {
+		t.Fatal("insufficient stack")
+	}
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		if !strings.Contains(line, " STACK ") {
+			t.Errorf("unexpected line: %s", line)
+		}
+	}
+
+	if !strings.Contains(lines[0], " foo") {
+		t.Errorf("missing message: %s", lines[0])
+	}
+
+	if !strings.Contains(lines[1], "TestNullLaneLogStackDirect") {
+		t.Errorf("unexpected top of stack: %s", lines[1])
+	}
+}
+
+func TestNullLaneLogStackDirectTrim(t *testing.T) {
+	l := NewNullLane(nil)
+	l2 := NewLogLane(nil)
+	l.AddTee(l2)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	l.LogStackTrim("", 1)
+
+	lines := strings.Split(buf.String(), "\n")
+	if len(lines) < 2 {
+		t.Fatal("insufficient stack")
+	}
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		if !strings.Contains(line, " STACK ") {
+			t.Errorf("unexpected line: %s", line)
+		}
+	}
+
+	if !strings.Contains(lines[0], "testing.") {
+		t.Errorf("unexpected top of stack: %s", lines[0])
+	}
+}
+
+func TestNullLaneLogStackDirectTrim2(t *testing.T) {
+	l := NewNullLane(nil)
+	l2 := NewLogLane(nil)
+	l.AddTee(l2)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	l.LogStackTrim("foo", 1)
+
+	lines := strings.Split(buf.String(), "\n")
+	if len(lines) < 2 {
+		t.Fatal("insufficient stack")
+	}
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		if !strings.Contains(line, " STACK ") {
+			t.Errorf("unexpected line: %s", line)
+		}
+	}
+
+	if !strings.Contains(lines[0], " foo") {
+		t.Errorf("missing message: %s", lines[0])
+	}
+
+	if !strings.Contains(lines[1], "testing.") {
+		t.Errorf("unexpected top of stack: %s", lines[1])
+	}
+}
+
+func TestTestingLaneLogStackDirect(t *testing.T) {
+	l := NewTestingLane(nil)
+	l2 := NewLogLane(nil)
+	l.AddTee(l2)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	l.EnableSingleLineStackTrace(false) // this setting should have no impact on LogStack()
+
+	l.LogStack("")
+
+	lines := strings.Split(buf.String(), "\n")
+	if len(lines) < 4 {
+		t.Fatal("insufficient stack")
+	}
+
+	if lines[len(lines)-1] != "" {
+		t.Fatal("expected a blank last line in stdout")
+	}
+	lines = lines[:len(lines)-1]
+
+	for _, line := range lines {
+		if !strings.Contains(line, " STACK ") {
+			t.Errorf("unexpected line: %s", line)
+		}
+	}
+
+	if !strings.Contains(lines[0], "TestTestingLaneLogStackDirect") {
+		t.Errorf("unexpected top of stack: %s", lines[0])
+	}
+
+	all := l.EventsToString()
+	testEvents := strings.Split(all, "\n")
+
+	if len(testEvents) != len(lines) {
+		t.Fatal("test events are not consistent with logging")
+	}
+
+	if !strings.Contains(testEvents[0], "TestTestingLaneLogStackDirect") {
+		t.Errorf("unexpected top of stack: %s", testEvents[0])
+	}
+}
+
+func TestTestingLaneLogStackDirect2(t *testing.T) {
+	l := NewTestingLane(nil)
+	l2 := NewLogLane(nil)
+	l.AddTee(l2)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	l.EnableSingleLineStackTrace(false) // this setting should have no impact on LogStack()
+
+	l.LogStack("foo")
+
+	lines := strings.Split(buf.String(), "\n")
+	if len(lines) < 4 {
+		t.Fatal("insufficient stack")
+	}
+
+	if lines[len(lines)-1] != "" {
+		t.Fatal("expected a blank last line in stdout")
+	}
+	lines = lines[:len(lines)-1]
+
+	for _, line := range lines {
+		if !strings.Contains(line, " STACK ") {
+			t.Errorf("unexpected line: %s", line)
+		}
+	}
+
+	if !strings.Contains(lines[0], " foo") {
+		t.Errorf("missing message: %s", lines[0])
+	}
+
+	if !strings.Contains(lines[1], "TestTestingLaneLogStackDirect") {
+		t.Errorf("unexpected top of stack: %s", lines[1])
+	}
+
+	all := l.EventsToString()
+	testEvents := strings.Split(all, "\n")
+
+	if len(testEvents) != len(lines) {
+		t.Fatal("test events are not consistent with logging")
+	}
+
+	if !strings.Contains(testEvents[1], "TestTestingLaneLogStackDirect") {
+		t.Errorf("unexpected top of stack: %s", testEvents[1])
+	}
+}
+
+func TestTestingLaneLogStackDirect3(t *testing.T) {
+	l := NewTestingLane(nil)
+	l2 := NewLogLane(nil)
+	l.AddTee(l2)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	l.EnableSingleLineStackTrace(true) // this setting should have no impact on LogStack()
+
+	l.LogStack("")
+
+	lines := strings.Split(buf.String(), "\n")
+	if len(lines) < 4 {
+		t.Fatal("insufficient stack")
+	}
+
+	if lines[len(lines)-1] != "" {
+		t.Fatal("expected a blank last line in stdout")
+	}
+	lines = lines[:len(lines)-1]
+
+	for _, line := range lines {
+		if !strings.Contains(line, " STACK ") {
+			t.Errorf("unexpected line: %s", line)
+		}
+	}
+
+	if !strings.Contains(lines[0], "TestTestingLaneLogStackDirect") {
+		t.Errorf("unexpected top of stack: %s", lines[0])
+	}
+
+	all := l.EventsToString()
+	testEvents := strings.Split(all, "\n")
+
+	if len(testEvents) != len(lines) {
+		t.Fatal("test events are not consistent with logging")
+	}
+
+	if !strings.Contains(testEvents[0], "TestTestingLaneLogStackDirect") {
+		t.Errorf("unexpected top of stack: %s", testEvents[0])
+	}
+}
+
+func TestTestingLaneLogStackDirectTrim(t *testing.T) {
+	l := NewTestingLane(nil)
+	l2 := NewLogLane(nil)
+	l.AddTee(l2)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	l.EnableSingleLineStackTrace(true) // this setting should have no impact on LogStack()
+
+	l.LogStackTrim("", 1)
+
+	lines := strings.Split(buf.String(), "\n")
+	if len(lines) < 2 {
+		t.Fatal("insufficient stack")
+	}
+
+	if lines[len(lines)-1] != "" {
+		t.Fatal("expected a blank last line in stdout")
+	}
+	lines = lines[:len(lines)-1]
+
+	for _, line := range lines {
+		if !strings.Contains(line, " STACK ") {
+			t.Errorf("unexpected line: %s", line)
+		}
+	}
+
+	if !strings.Contains(lines[0], "testing.") {
+		t.Errorf("unexpected top of stack: %s", lines[0])
+	}
+
+	all := l.EventsToString()
+	testEvents := strings.Split(all, "\n")
+
+	if len(testEvents) != len(lines) {
+		t.Fatal("test events are not consistent with logging")
+	}
+
+	if !strings.Contains(testEvents[0], "testing.") {
+		t.Errorf("unexpected top of stack: %s", testEvents[0])
+	}
+}
+
+func TestTestingLaneLogStackDirectTrim2(t *testing.T) {
+	l := NewTestingLane(nil)
+	l2 := NewLogLane(nil)
+	l.AddTee(l2)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	l.EnableSingleLineStackTrace(true) // this setting should have no impact on LogStack()
+
+	l.LogStackTrim("foo", 1)
+
+	lines := strings.Split(buf.String(), "\n")
+	if len(lines) < 2 {
+		t.Fatal("insufficient stack")
+	}
+
+	if lines[len(lines)-1] != "" {
+		t.Fatal("expected a blank last line in stdout")
+	}
+	lines = lines[:len(lines)-1]
+
+	for _, line := range lines {
+		if !strings.Contains(line, " STACK ") {
+			t.Errorf("unexpected line: %s", line)
+		}
+	}
+
+	if !strings.Contains(lines[0], " foo") {
+		t.Errorf("missing message: %s", lines[0])
+	}
+
+	if !strings.Contains(lines[1], "testing.") {
+		t.Errorf("unexpected top of stack: %s", lines[0])
+	}
+
+	all := l.EventsToString()
+	testEvents := strings.Split(all, "\n")
+
+	if len(testEvents) != len(lines) {
+		t.Fatal("test events are not consistent with logging")
+	}
+
+	if !strings.Contains(testEvents[1], "testing.") {
+		t.Errorf("unexpected top of stack: %s", testEvents[1])
+	}
+}
+
+func TestTestingLaneLogStackDirectSingleEvent(t *testing.T) {
+	l := NewTestingLane(nil)
+
+	l.EnableSingleLineStackTrace(true)
+	l.EnableStackTrace(LogLevelError, true)
+
+	l.Error("test")
+
+	tl := l.(*testingLane)
+
+	if len(tl.Events) != 2 {
+		t.Fatal("wrong events")
+	}
+
+	stack := strings.Split(tl.Events[1].Message, "\n")
+	if len(stack) < 4 {
+		t.Fatal("insufficient stack")
+	}
+
+	if !strings.Contains(stack[0], "TestTestingLaneLogStackDirectSingleEvent") {
+		t.Errorf("unexpected top of stack: %s", stack[0])
+	}
+}
+
+func TestTestingLaneLogStackDirectMultiEvent(t *testing.T) {
+	l := NewTestingLane(nil)
+
+	l.EnableSingleLineStackTrace(false)
+	l.EnableStackTrace(LogLevelError, true)
+
+	l.Error("test")
+
+	tl := l.(*testingLane)
+
+	if len(tl.Events) < 5 {
+		t.Fatal("wrong events")
+	}
+
+	for i := 1; i < len(tl.Events); i++ {
+		if tl.Events[i].Level != "STACK" {
+			t.Errorf("unexpected level at %d: %s", i, tl.Events[i].Level)
+		}
+	}
+
+	if !strings.Contains(tl.Events[1].Message, "TestTestingLaneLogStackDirectMultiEvent") {
+		t.Errorf("unexpected top of stack: %s", tl.Events[1].Message)
+	}
 }

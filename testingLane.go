@@ -28,6 +28,7 @@ type (
 		tlog                 *log.Logger
 		level                LaneLogLevel
 		stackTrace           []atomic.Bool
+		testingStack         atomic.Bool
 		tees                 []Lane
 		parent               *testingLane
 		wantDescendantEvents bool
@@ -70,6 +71,10 @@ type (
 
 		// Retrieves metadata
 		GetMetadata(key string) string
+
+		// Controls whether stack traces are a single event or an event per
+		// call stack line.
+		EnableSingleLineStackTrace(wanted bool) (prior bool)
 	}
 )
 
@@ -85,12 +90,15 @@ func deriveTestingLane(ctx context.Context, parent *testingLane, tees []Lane) Te
 	}
 
 	tl := testingLane{
-		stackTrace: make([]atomic.Bool, int(LogLevelFatal+1)),
+		stackTrace: make([]atomic.Bool, int(LogLevelStack+1)),
 		parent:     parent,
 		tees:       tees,
 	}
+	tl.EnableStackTrace(LogLevelStack, true)
 	tl.SetPanicHandler(nil)
 	tl.SetOwner(&tl)
+
+	tl.testingStack.Store(true) // enable single event stack output by default
 
 	// make a logging instance that ultimately does logging via the lane
 	tlw := testingLogWriter{tl: &tl}
@@ -99,6 +107,7 @@ func deriveTestingLane(ctx context.Context, parent *testingLane, tees []Lane) Te
 	if parent != nil {
 		tl.onPanic = parent.onPanic
 		tl.wantDescendantEvents = parent.wantDescendantEvents
+		tl.journeyId = parent.journeyId
 	}
 
 	tl.Context = context.WithValue(ctx, testing_lane_id, uuid.New().String())
@@ -341,13 +350,13 @@ func (tl *testingLane) WarnObject(message string, obj any) {
 
 func (tl *testingLane) Error(args ...any) {
 	tl.recordLaneEvent(LogLevelError, "ERROR", nil, args...)
-	tl.logStack(LogLevelError)
+	tl.logTestingLaneStack(LogLevelError, 1)
 	tl.tee(func(l Lane) { l.Error(args...) })
 }
 
 func (tl *testingLane) Errorf(format string, args ...any) {
 	tl.recordLaneEvent(LogLevelError, "ERROR", &format, args...)
-	tl.logStack(LogLevelError)
+	tl.logTestingLaneStack(LogLevelError, 1)
 	tl.tee(func(l Lane) { l.Errorf(format, args...) })
 }
 
@@ -383,13 +392,67 @@ func (tl *testingLane) FatalObject(message string, obj any) {
 	LogObject(tl, LogLevelFatal, message, obj)
 }
 
-func (tl *testingLane) logStack(level LaneLogLevel) {
-	if tl.stackTrace[level].Load() {
-		buf := make([]byte, 16384)
-		n := runtime.Stack(buf, false)
-		format := "%s"
-		tl.recordLaneEvent(level, "STACK", &format, string(buf[0:n]))
+func (tl *testingLane) logTestingLaneStack(level LaneLogLevel, skippedCallers int) {
+	if tl.testingStack.Load() {
+		if tl.stackTrace[level].Load() {
+			// When single event stack trace is enabled in the testing lane, record
+			// the stack as a single message, so that the test code has a predictable
+			// number of log events.
+			buf := make([]byte, 16384)
+			n := runtime.Stack(buf, false)
+			lines := strings.Split(strings.TrimSpace(string(buf[0:n])), "\n")
+
+			skip := 3 + (2 * skippedCallers)
+			if skip > len(lines) {
+				skip = len(lines)
+			}
+			filtered := strings.Join(lines[skip:], "\n")
+
+			format := "%s"
+			tl.recordLaneEvent(level, "STACK", &format, filtered)
+		}
+	} else {
+		// When single event stack trace is not enabled in the testing lane, fall
+		// back to the normal behavior
+		tl.logStackIf(level, "", skippedCallers+1)
 	}
+}
+
+func (tl *testingLane) logStackIf(level LaneLogLevel, message string, skippedCallers int) {
+
+	if tl.stackTrace[level].Load() {
+		// skip lines: the first line (goroutine label), plus the LogStack() and logging API
+		tl.logStack(message, skippedCallers+1)
+	}
+}
+
+func (tl *testingLane) logStack(message string, skippedCallers int) {
+	buf := make([]byte, 16384)
+	n := runtime.Stack(buf, false)
+	lines := strings.Split(strings.TrimSpace(string(buf[0:n])), "\n")
+
+	// each has two lines (the function name on one line, followed by source info on the next line)
+	format := "%s"
+	if message != "" {
+		tl.recordLaneEvent(LogLevelStack, "STACK", &format, message)
+	}
+
+	skip := 3 + (2 * skippedCallers)
+	for n := skip; n < len(lines); n++ {
+		if lines[n] != "" {
+			tl.recordLaneEvent(LogLevelStack, "STACK", &format, lines[n])
+		}
+	}
+}
+
+func (tl *testingLane) LogStack(message string) {
+	tl.logStackIf(LogLevelStack, message, 1)
+	tl.tee(func(l Lane) { l.LogStackTrim(message, 3) })
+}
+
+func (tl *testingLane) LogStackTrim(message string, skippedCallers int) {
+	tl.logStackIf(LogLevelStack, message, skippedCallers+1)
+	tl.tee(func(l Lane) { l.LogStackTrim(message, skippedCallers+3) })
 }
 
 func (tl *testingLane) Logger() *log.Logger {
@@ -503,6 +566,10 @@ func (tl *testingLane) DeriveReplaceContext(ctx OptionalContext) Lane {
 
 func (tl *testingLane) EnableStackTrace(level LaneLogLevel, enable bool) bool {
 	return tl.stackTrace[level].Swap(enable)
+}
+
+func (tl *testingLane) EnableSingleLineStackTrace(enable bool) bool {
+	return tl.testingStack.Swap(enable)
 }
 
 func (tl *testingLane) LaneId() string {

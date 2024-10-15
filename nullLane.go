@@ -130,6 +130,14 @@ func (nl *nullLane) FatalObject(message string, obj any) {
 	LogObject(nl, LogLevelFatal, message, obj)
 }
 
+func (nl *nullLane) LogStack(message string) {
+	nl.tee(func(l Lane) { l.LogStackTrim(message, 3) })
+}
+
+func (nl *nullLane) LogStackTrim(message string, skippedCallers int) {
+	nl.tee(func(l Lane) { l.LogStackTrim(message, skippedCallers+3) })
+}
+
 func (nl *nullLane) Logger() *log.Logger {
 	return nl.wlog
 }
@@ -140,6 +148,7 @@ func (nl *nullLane) Close() {
 func (nl *nullLane) Derive() Lane {
 	l := deriveNullLane(nl, context.WithValue(nl.Context, ParentLaneIdKey, nl.LaneId()), nl.tees, nl.onPanic)
 	l.SetLogLevel(LaneLogLevel(atomic.LoadInt32(&nl.level)))
+	l.SetJourneyId(nl.journeyId)
 	return l
 }
 

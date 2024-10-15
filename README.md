@@ -1,16 +1,18 @@
 # go-lane
 
-A "lane" is a context that has logging associated. It is a melding of Go's `log` and its `context`.
+A "lane" is a context that integrates logging, combining Go's `log` package with its `context`.
 
-A lane is intended to be passed into everything, and used like a regular `context` for patterns such as cancelation, and also used for logging in place of `log`.
+A lane is designed to be passed into all functions, serving as a regular `context` for tasks like cancellation,
+while also replacing `log` for logging purposes.
 
-The logging interface provides several tools for rich diagnostics, including 
-correlation IDs, stack traces, easy logging of structs including private members, 
-log capturing for test verification, recording data differences between two structs, 
-and more.
+The logging interface offers various tools for detailed diagnostics, including correlation IDs, stack traces,
+easy logging of structs (even private fields), log capturing for test verification, recording structural
+differences, and more.
 
-Sister projects adapt logs to unify them into one logging solution, such as [go-lane-gin](https://github.com/jimsnab/go-lane-gin) and
+Related projects extend this unified logging approach, such as
+[go-lane-gin](https://github.com/jimsnab/go-lane-gin) and
 [go-lane-opensearch](https://github.com/jimsnab/go-lane-opensearch).
+
 
 # Basic Use
 
@@ -74,6 +76,9 @@ Lane interface {
 	Fatalf(format string, args ...any)
 	FatalObject(message string, obj any)
 
+	LogStack(message string)
+	LogStackTrim(message string, skippedCallers int)
+
 	Logger() *log.Logger
 	Close()
 
@@ -102,33 +107,31 @@ Lane interface {
 }
 ```
 
-For the most part, application code will use the logging functions (`Trace`, `Debug`, ...).
+For the most part, application code will use the logging functions (`Trace`, `Debug`, etc.).
 
-Each log level provides:
+Each log level offers:
 
-* a `Sprint` version (ex: `Info` or `Error`)
-* a `Sprintf` version (ex: `Infof` or `Errorf`)
-* an object logger (ex: `InfoObject` or `ErrorObject`)
+* a `Sprint` version (e.g., `Info` or `Error`)
+* a `Sprintf` version (e.g., `Infof` or `Errorf`)
+* an object logger (e.g., `InfoObject` or `ErrorObject`)
 
-The object logger will convert an object into JSON, including private fields.
+The object logger converts an object to JSON, including private fields.
 
-A correlation ID is provided via `LaneId()`, which is automatically inserted into the
-logged message.
+A correlation ID is provided via `LaneId()`, which is automatically included in logged messages.
 
-When spawining go routines, pass `l` around, or use one of the Derive functions when
-a new correlation ID is needed.
+When spawning goroutines, pass `l` (the lane) around. Use one of the `Derive` functions if a new
+correlation ID is needed.
 
-Optionally, an "outer ID" can be assigned with `SetJourneyId()`. This function is useful
-to correlate a transaction that involves many lanes, or to correlate with an externally
-generated ID. The journey id is inherited by derived lanes.
+Optionally, an "outer ID" can be assigned with `SetJourneyId()`. This function is useful for
+correlating transactions that involve multiple lanes or for linking with an externally generated ID.
+The journey ID is inherited by derived lanes.
 
-For example, a front end might generate a journey ID, passing it with its REST
-request to a go server that logs its activity via lanes. By setting the journey ID to
-what the front end has generated, the lanes will be correlated with front end logging.
+For example, a front-end application might generate a journey ID and pass it with its REST request
+to a Go server that logs activity via lanes. By setting the journey ID to match what the front end
+generated, the lanes will be correlated with front-end logging.
 
-Another lane can "tee" from a source lane. For example, it might be desired to tee a
-testing lane from a logging lane, and then a unit test can verify certain log messages
-occur during the test.
+Another lane can "tee" from a source lane. For instance, you might tee a testing lane from a logging
+lane, allowing a unit test to verify that certain log messages are generated during the test.
 
 ## Utility Functions
 
@@ -186,6 +189,9 @@ Check out other projects, such as [go-lane-gin](https://github.com/jimsnab/go-la
 
 # Stack Trace
 
+Stacks can be logged using `LogStack()`, or `LogStackTrim()` to remove some of the callers
+from the top of the stack.
+
 Stack trace logging can be enabled on a per level basis. For example, to enable stack
 trace output for `ERROR`:
 
@@ -197,17 +203,21 @@ func example() {
 }
 ```
 
+The test lane includes a special option, `EnableSingleLineStackTrace()`, which logs the entire stack
+trace as a single test event. This creates a more predictable test event list compared to traditional
+stack traces, where each caller is logged as a separate event.
+
 # Panic Handler
 
-Fatal messages result in a panic. The panic handler can be replaced by test code to
-verify a fatal condition is reached within a test.
+Fatal messages trigger a panic. In test code, the panic handler can be replaced to verify that a
+fatal condition is reached during the test.
 
-An ordinary unrecovered panic won't allow other go routines to continue, because,
-obviously, the process normally terminates on a panic. A test must ensure all go
-routines started by the test are stopped by its replacement panic handler.
+An ordinary unrecovered panic will prevent other goroutines from continuing, as the process
+typically terminates on a panic. A test must ensure that all goroutines started by the test are
+stopped by the replacement panic handler.
 
-At minimum, the test's replacement panic handler must not let the panicking go
-routine continue execution (it should call `runtime.Goexit()`).
+At a minimum, the test's replacement panic handler must prevent the panicking goroutine from
+continuing execution (it should call `runtime.Goexit()`).
 
 # OptionalContext
 

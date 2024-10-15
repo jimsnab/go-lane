@@ -20,7 +20,6 @@ type (
 		Lane
 		AddCR(shouldAdd bool) (prior bool)
 		SetFlagsMask(mask int) (prior int)
-		LogStack()
 	}
 
 	logLane struct {
@@ -134,7 +133,8 @@ func (ll *logLane) initialize(laneOuter Lane, pll *logLane, startingCtx context.
 		startingCtx = context.Background()
 	}
 
-	ll.stackTrace = make([]atomic.Bool, int(LogLevelFatal+1))
+	ll.stackTrace = make([]atomic.Bool, int(LogLevelStack+1))
+	ll.EnableStackTrace(LogLevelStack, true)
 	ll.onCreateLane = onCreate // keep this reference so that future Derive() calls can invoke it
 	ll.outer = laneOuter
 	ll.parent = pll
@@ -269,7 +269,7 @@ func (ll *logLane) printMsg(level LaneLogLevel, prefix string, teeFn func(l Lane
 			}
 		}
 		ll.writer.Print(msg)
-		ll.logStackIf(level)
+		ll.logStackIf(level, "", 2)
 	}
 	ll.tee(teeFn)
 }
@@ -285,7 +285,7 @@ func (ll *logLane) printfMsg(level LaneLogLevel, prefix string, teeFn func(l Lan
 			}
 		}
 		ll.writer.Print(msg)
-		ll.logStackIf(level)
+		ll.logStackIf(level, "", 2)
 	}
 	ll.tee(teeFn)
 }
@@ -377,17 +377,23 @@ func (ll *logLane) FatalObject(message string, obj any) {
 	ll.onPanic()
 }
 
-func (ll *logLane) logStackIf(level LaneLogLevel) {
-	if ll.stackTrace[level].Load() {
-		// skip seven lines: the first line (goroutine label), plus the LogStack() and logging API
-		ll.logStack(9)
+func (ll *logLane) logStackIf(level LaneLogLevel, message string, skipCallers int) {
+	if ll.stackTrace[level].Load() && level != LogLevelStack {
+		// skip lines: the first line (goroutine label), plus the LogStack() and logging API
+		ll.logStack(message, skipCallers+1)
 	}
 }
 
-func (ll *logLane) logStack(skip int) {
+func (ll *logLane) logStack(message string, skipCallers int) {
 	buf := make([]byte, 16384)
 	n := runtime.Stack(buf, false)
 	lines := strings.Split(strings.TrimSpace(string(buf[0:n])), "\n")
+
+	skip := 3 + (skipCallers * 2)
+
+	if message != "" {
+		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("STACK"), message, ll.cr)
+	}
 
 	// each has two lines (the function name on one line, followed by source info on the next line)
 	for n := skip; n < len(lines); n++ {
@@ -395,8 +401,15 @@ func (ll *logLane) logStack(skip int) {
 	}
 }
 
-func (ll *logLane) LogStack() {
-	ll.logStack(5)
+func (ll *logLane) LogStack(message string) {
+	ll.LogStackTrim(message, 1)
+}
+
+func (ll *logLane) LogStackTrim(message string, skippedCallers int) {
+	if ll.shouldLog(LogLevelStack) {
+		ll.logStack(message, skippedCallers+1)
+	}
+	ll.tee(func(l Lane) { l.LogStackTrim(message, skippedCallers+3) })
 }
 
 func (ll *logLane) Logger() *log.Logger {

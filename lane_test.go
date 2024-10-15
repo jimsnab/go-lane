@@ -104,6 +104,30 @@ func TestLane(t *testing.T) {
 	}
 }
 
+func TestTestingLaneJourneyId(t *testing.T) {
+	tl := NewTestingLane(nil)
+	id := uuid.New().String()
+	id = id[len(id)-10:]
+	tl.SetJourneyId(id)
+
+	if tl.JourneyId() != id {
+		t.Error("did not find journey id")
+	}
+}
+
+func TestTestingLaneJourneyIdDerived(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+	id := uuid.New().String()
+	id = id[len(id)-10:]
+	tl.SetJourneyId(id)
+
+	tl2 := tl.Derive()
+
+	if tl2.JourneyId() != id {
+		t.Error("did not find journey id")
+	}
+}
+
 func TestLaneSetLevel(t *testing.T) {
 	tl := NewTestingLane(context.Background())
 
@@ -972,6 +996,10 @@ func TestLogLaneJourneyIdDerived(t *testing.T) {
 
 	ll2 := ll.Derive()
 
+	if ll2.JourneyId() != id {
+		t.Error("derivation missing journey id")
+	}
+
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
 	defer func() { log.SetOutput(os.Stderr) }()
@@ -1333,7 +1361,7 @@ func verifyLogLaneEvents(t *testing.T, ll Lane, expected string, buf bytes.Buffe
 		actualLines := strings.Split(strings.TrimSpace(buf.String()), "\n")
 
 		if len(expectedLines) != len(actualLines) {
-			t.Fatal("did not get expected number of log lines")
+			t.Fatalf("did not get expected number of log lines (%d vs %d expected)", len(actualLines), len(expectedLines))
 		}
 
 		for i, actualLine := range actualLines {
@@ -1442,10 +1470,68 @@ func TestLogLaneLogStack(t *testing.T) {
 	log.SetOutput(&buf)
 	defer func() { log.SetOutput(os.Stderr) }()
 
-	ll.LogStack()
+	ll.LogStack("")
 
 	expected := `STACK {GUID} {ANY}
 STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}`
+
+	verifyLogLaneEvents(t, ll, expected, buf)
+}
+
+func TestLogLaneLogStack2(t *testing.T) {
+	l := NewLogLane(context.Background())
+	ll := l.(LogLane)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll.LogStack("foo")
+
+	expected := `STACK {GUID} foo
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}`
+
+	verifyLogLaneEvents(t, ll, expected, buf)
+}
+
+func TestLogLaneLogStackTrim(t *testing.T) {
+	l := NewLogLane(context.Background())
+	ll := l.(LogLane)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll.LogStackTrim("", 1)
+
+	expected := `STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}
+STACK {GUID} {ANY}`
+
+	verifyLogLaneEvents(t, ll, expected, buf)
+}
+
+func TestLogLaneLogStackTrim2(t *testing.T) {
+	l := NewLogLane(context.Background())
+	ll := l.(LogLane)
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll.LogStackTrim("foo", 1)
+
+	expected := `STACK {GUID} foo
 STACK {GUID} {ANY}
 STACK {GUID} {ANY}
 STACK {GUID} {ANY}
@@ -1829,6 +1915,30 @@ func TestNullLane(t *testing.T) {
 	// setting metadata is harmless
 	l := Lane(nl)
 	l.SetMetadata("key", "ignored")
+}
+
+func TestNullLaneJourneyId(t *testing.T) {
+	nl := NewNullLane(nil)
+	id := uuid.New().String()
+	id = id[len(id)-10:]
+	nl.SetJourneyId(id)
+
+	if nl.JourneyId() != id {
+		t.Error("did not find journey id")
+	}
+}
+
+func TestNullLaneJourneyIdDerived(t *testing.T) {
+	nl := NewNullLane(context.Background())
+	id := uuid.New().String()
+	id = id[len(id)-10:]
+	nl.SetJourneyId(id)
+
+	nl2 := nl.Derive()
+
+	if nl2.JourneyId() != id {
+		t.Error("did not find journey id")
+	}
 }
 
 func TestNullLaneSetLevel(t *testing.T) {
@@ -2335,7 +2445,7 @@ func TestDiskLaneStack(t *testing.T) {
 	}
 
 	ll := dl.(LogLane)
-	ll.LogStack()
+	ll.LogStack("")
 	dl.Close()
 
 	bytes, err := os.ReadFile("test.log")
