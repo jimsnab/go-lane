@@ -24,6 +24,7 @@ type (
 		onPanic    Panic
 		journeyId  string
 		parent     Lane
+		maxLength  atomic.Int32
 	}
 
 	wrappedNullWriter struct {
@@ -43,7 +44,7 @@ func deriveNullLane(parent Lane, ctx context.Context, tees []Lane, onPanic Panic
 	}
 
 	nl := nullLane{
-		stackTrace: make([]atomic.Bool, int(LogLevelFatal+1)),
+		stackTrace: make([]atomic.Bool, logLevelMax),
 		tees:       tees,
 		parent:     parent,
 	}
@@ -54,6 +55,8 @@ func deriveNullLane(parent Lane, ctx context.Context, tees []Lane, onPanic Panic
 	nl.wlog = log.New(&wnw, "", 0)
 
 	nl.Context = context.WithValue(ctx, null_lane_id, uuid.New().String())
+
+	copyConfigToDerivation(&nl, parent)
 	return &nl
 }
 
@@ -136,6 +139,24 @@ func (nl *nullLane) LogStack(message string) {
 
 func (nl *nullLane) LogStackTrim(message string, skippedCallers int) {
 	nl.tee(func(l Lane) { l.LogStackTrim(message, skippedCallers+3) })
+}
+
+func (nl *nullLane) SetLengthConstraint(maxLength int) int {
+	old := nl.maxLength.Load()
+	if maxLength > 1 {
+		nl.maxLength.Store(int32(maxLength))
+	} else {
+		nl.maxLength.Store(0)
+	}
+	return int(old)
+}
+
+func (nl *nullLane) Constrain(text string) string {
+	maxLen := nl.maxLength.Load()
+	if maxLen > 0 && len(text) > int(maxLen) {
+		text = text[:maxLen-1] + "\u2026"
+	}
+	return text
 }
 
 func (nl *nullLane) Logger() *log.Logger {

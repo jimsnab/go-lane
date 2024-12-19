@@ -17,6 +17,8 @@ const (
 	LogLevelStack
 )
 
+const logLevelMax = LogLevelStack + 1
+
 type (
 	LaneLogLevel int
 
@@ -103,6 +105,9 @@ type (
 		// Logs the stack, trimming the top of the stack by the number of [skippedCallers] specified
 		LogStackTrim(message string, skippedCallers int)
 
+		// Set a limit on the message length, or less than 1 for no limit.
+		SetLengthConstraint(maxLength int) int
+
 		// Exposes access to the underlying log object.
 		Logger() *log.Logger
 		Close()
@@ -159,4 +164,9 @@ type (
 	}
 
 	Panic func()
+
+	// functions for internal implementation
+	laneInternal interface {
+		Constrain(msg string) string
+	}
 )

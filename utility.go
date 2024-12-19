@@ -34,6 +34,9 @@ func LogObject(l Lane, level LaneLogLevel, message string, obj any) {
 	}
 	enc := fmt.Sprintf("%s: %s", message, string(raw))
 
+	li := l.(laneInternal)
+	enc = li.Constrain(enc)
+
 	switch level {
 	case LogLevelTrace:
 		l.Trace(enc)
@@ -274,4 +277,33 @@ func (seq asciiSequence) MarshalJSON() ([]byte, error) {
 	}
 	sb.WriteRune('"')
 	return []byte(sb.String()), nil
+}
+
+func copyConfigToDerivation(dest, src Lane) {
+	if !isNil(src) {
+		for i := LogLevelTrace; i < logLevelMax; i++ {
+			old := src.EnableStackTrace(i, false)
+			src.EnableStackTrace(i, old)
+			dest.EnableStackTrace(i, old)
+		}
+
+		oldMaxLen := src.SetLengthConstraint(0)
+		src.SetLengthConstraint(oldMaxLen)
+		dest.SetLengthConstraint(oldMaxLen)
+	}
+}
+
+func isNil(i any) bool {
+	if i == nil {
+		return true // interface itself is nil
+	}
+
+	// use reflection to check if the underlying value is nil
+	v := reflect.ValueOf(i)
+	switch v.Kind() {
+	case reflect.Ptr, reflect.Slice, reflect.Map, reflect.Interface, reflect.Func, reflect.Chan:
+		return v.IsNil()
+	default:
+		return false
+	}
 }

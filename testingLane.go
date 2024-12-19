@@ -34,6 +34,7 @@ type (
 		wantDescendantEvents bool
 		onPanic              Panic
 		journeyId            string
+		maxLength            atomic.Int32
 	}
 
 	testingLaneId string
@@ -90,7 +91,7 @@ func deriveTestingLane(ctx context.Context, parent *testingLane, tees []Lane) Te
 	}
 
 	tl := testingLane{
-		stackTrace: make([]atomic.Bool, int(LogLevelStack+1)),
+		stackTrace: make([]atomic.Bool, logLevelMax),
 		parent:     parent,
 		tees:       tees,
 	}
@@ -111,6 +112,8 @@ func deriveTestingLane(ctx context.Context, parent *testingLane, tees []Lane) Te
 	}
 
 	tl.Context = context.WithValue(ctx, testing_lane_id, uuid.New().String())
+
+	copyConfigToDerivation(&tl, parent)
 	return &tl
 }
 
@@ -248,6 +251,14 @@ func (tl *testingLane) recordLaneEvent(level LaneLogLevel, levelText string, for
 	tl.recordLaneEventRecursive(true, level, levelText, format, args...)
 }
 
+func (tl *testingLane) Constrain(msg string) string {
+	maxLen := tl.maxLength.Load()
+	if maxLen > 0 && len(msg) > int(maxLen) {
+		msg = msg[:maxLen-1] + "\u2026"
+	}
+	return msg
+}
+
 // Worker that adds the test event to the testing lane, and then passes it up to the parent,
 // where the parent decides to capture it as well, and then passes it up to the
 // grandparent, and so on.
@@ -268,6 +279,8 @@ func (tl *testingLane) recordLaneEventRecursive(originator bool, level LaneLogLe
 			} else {
 				le.Message = fmt.Sprintf(*format, args...)
 			}
+
+			le.Message = tl.Constrain(le.Message)
 
 			v := tl.Value(testing_lane_id)
 			if v != nil {
@@ -455,6 +468,16 @@ func (tl *testingLane) LogStackTrim(message string, skippedCallers int) {
 	tl.tee(func(l Lane) { l.LogStackTrim(message, skippedCallers+3) })
 }
 
+func (tl *testingLane) SetLengthConstraint(maxLength int) int {
+	old := tl.maxLength.Load()
+	if maxLength > 1 {
+		tl.maxLength.Store(int32(maxLength))
+	} else {
+		tl.maxLength.Store(0)
+	}
+	return int(old)
+}
+
 func (tl *testingLane) Logger() *log.Logger {
 	return tl.tlog
 }
@@ -561,6 +584,7 @@ func (tl *testingLane) DeriveReplaceContext(ctx OptionalContext) Lane {
 		l.AddTee(tee)
 	}
 
+	copyConfigToDerivation(l, tl)
 	return l
 }
 

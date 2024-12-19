@@ -497,6 +497,144 @@ func TestLaneReplaceContext(t *testing.T) {
 	}
 }
 
+func TestLaneInheritStackTrace(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+
+	tl.EnableStackTrace(LogLevelError, true)
+	if !tl.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true")
+	}
+
+	tl2 := tl.Derive()
+	if !tl2.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on tl2")
+	}
+
+	tl3, _ := tl.DeriveWithCancel()
+	if !tl3.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on tl3")
+	}
+
+	tl4, _ := tl.DeriveWithCancelCause()
+	if !tl4.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on tl4")
+	}
+
+	tl5 := tl.DeriveWithoutCancel()
+	if !tl5.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on tl5")
+	}
+
+	tl6, _ := tl.DeriveWithTimeout(time.Hour)
+	if !tl6.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on tl6")
+	}
+
+	tl7, _ := tl.DeriveWithTimeoutCause(time.Hour, nil)
+	if !tl7.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on tl7")
+	}
+
+	tl8 := tl.DeriveReplaceContext(context.Background())
+	if !tl8.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on tl8")
+	}
+	if tl8.EnableStackTrace(LogLevelWarn, true) {
+		t.Error("expected false on tl8 warn")
+	}
+}
+
+func TestTestingLaneConstrainedLength(t *testing.T) {
+	tl := NewTestingLane(nil)
+	old := tl.SetLengthConstraint(25)
+	if old != 0 {
+		t.Error("expected initial 0")
+	}
+	old = tl.SetLengthConstraint(20)
+	if old != 25 {
+		t.Error("expected 25")
+	}
+
+	tl.Infof("the quick brown fox jumped over the lazy dog")
+
+	expected := "INFO	the quick brown fox\u2026"
+
+	if !tl.VerifyEventText(expected) {
+		t.Errorf("Test events don't match")
+	}
+}
+
+func TestTestingLaneConstrainedLengthObject(t *testing.T) {
+	tl := NewTestingLane(nil)
+	tl.SetLengthConstraint(20)
+
+	bigMap := map[string]int{}
+	for i := range 100 {
+		bigMap[fmt.Sprintf("#%d", i)] = i
+	}
+
+	tl.InfoObject("bigMap", bigMap)
+
+	ptl := tl.(*testingLane)
+	for _, e := range ptl.Events {
+		if len(e.Message) > 22 { // UTF-8 length 20
+			t.Errorf("message %s length %d too long", e.Message, len(e.Message))
+		}
+	}
+}
+
+func TestTestingLaneConstrainedLengthTee(t *testing.T) {
+	tl := NewTestingLane(nil)
+	tl2 := NewTestingLane(nil)
+	tl.AddTee(tl2)
+
+	tl.SetLengthConstraint(10)
+
+	tl.LogStack("stack")
+
+	ptl := tl.(*testingLane)
+	for _, e := range ptl.Events {
+		if len(e.Message) > 12 { // UTF-8 length 10
+			t.Errorf("message %s length %d too long", e.Message, len(e.Message))
+		}
+	}
+
+	ptl = tl2.(*testingLane)
+	exceeded := false
+	for _, e := range ptl.Events {
+		if len(e.Message) > 12 {
+			exceeded = true
+		}
+	}
+	if !exceeded {
+		t.Error("tee didn't get the full message")
+	}
+}
+
+func TestTestingLaneConstrainedLengthInherit(t *testing.T) {
+	tl := NewTestingLane(nil)
+	old := tl.SetLengthConstraint(25)
+	if old != 0 {
+		t.Error("expected initial 0")
+	}
+
+	l2 := tl.Derive()
+	tl2 := l2.(TestingLane)
+
+	old = tl.SetLengthConstraint(20)
+	if old != 25 {
+		t.Error("expected 25")
+	}
+
+	tl2.Infof("the quick brown fox jumped over the lazy dog")
+
+	expected := "INFO	the quick brown fox jump\u2026"
+
+	if !tl2.VerifyEventText(expected) {
+		t.Errorf("Test events don't match")
+	}
+}
+
 func TestLaneVerifyText(t *testing.T) {
 	tl := NewTestingLane(context.Background())
 
@@ -1462,6 +1600,53 @@ STACK {GUID} {ANY}`
 	verifyLogLaneEvents(t, ll, expected, buf)
 }
 
+func TestLogLaneInheritStackTrace(t *testing.T) {
+	ll := NewLogLane(context.Background())
+
+	ll.EnableStackTrace(LogLevelError, true)
+	if !ll.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true")
+	}
+
+	ll2 := ll.Derive()
+	if !ll2.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on ll2")
+	}
+
+	ll3, _ := ll.DeriveWithCancel()
+	if !ll3.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on ll3")
+	}
+
+	ll4, _ := ll.DeriveWithCancelCause()
+	if !ll4.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on ll4")
+	}
+
+	ll5 := ll.DeriveWithoutCancel()
+	if !ll5.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on ll5")
+	}
+
+	ll6, _ := ll.DeriveWithTimeout(time.Hour)
+	if !ll6.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on ll6")
+	}
+
+	ll7, _ := ll.DeriveWithTimeoutCause(time.Hour, nil)
+	if !ll7.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on ll7")
+	}
+
+	ll8 := ll.DeriveReplaceContext(context.Background())
+	if !ll8.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on ll8")
+	}
+	if ll8.EnableStackTrace(LogLevelInfo, true) {
+		t.Error("expected false on ll8 info")
+	}
+}
+
 func TestLogLaneLogStack(t *testing.T) {
 	l := NewLogLane(context.Background())
 	ll := l.(LogLane)
@@ -1538,6 +1723,170 @@ STACK {GUID} {ANY}
 STACK {GUID} {ANY}`
 
 	verifyLogLaneEvents(t, ll, expected, buf)
+}
+
+func TestLogLaneConstrainedLength(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll := NewLogLane(nil)
+	old := ll.SetLengthConstraint(25)
+	if old != 0 {
+		t.Error("expected initial 0")
+	}
+	old = ll.SetLengthConstraint(20)
+	if old != 25 {
+		t.Error("expected 25")
+	}
+
+	ll.Infof("the quick brown fox jumped over the lazy dog")
+
+	expected := "INFO {GUID} the quick brown fox\u2026"
+
+	verifyLogLaneEvents(t, ll, expected, buf)
+}
+
+func TestLogLaneConstrainedLengthObject(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll := NewLogLane(nil)
+	ll.SetLengthConstraint(20)
+
+	bigMap := map[string]int{}
+	for i := range 100 {
+		bigMap[fmt.Sprintf("#%d", i)] = i
+	}
+
+	ll.InfoObject("bigMap", bigMap)
+
+	text := buf.String()
+	if len(text) > 61 { // UTF-8 length of the full line of text
+		t.Errorf("text length %d too long", len(text))
+	}
+}
+
+func TestConstrainedLengthTee(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll := NewLogLane(nil)
+	tl := NewTestingLane(nil)
+	ll.AddTee(tl)
+	ll.SetLengthConstraint(10)
+
+	ll.LogStack("stack")
+
+	lines := strings.Split(buf.String(), "\n")
+	for _, line := range lines {
+		if line != "" && len(line) > 51 {
+			t.Errorf("line length %d wrong: %s", len(line), line)
+		}
+	}
+
+	ptl := tl.(*testingLane)
+	exceeded := false
+	for _, e := range ptl.Events {
+		if len(e.Message) > 10 {
+			exceeded = true
+		}
+	}
+	if !exceeded {
+		t.Error("tee didn't get the full message")
+	}
+}
+
+func TestLogLaneConstrainedLengthOff(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll := NewLogLane(nil)
+	ll.SetLengthConstraint(25)
+	ll.SetLengthConstraint(1)
+
+	ll.Infof("the quick brown fox jumped over the lazy dog")
+
+	expected := "INFO {GUID} the quick brown fox jumped over the lazy dog"
+
+	verifyLogLaneEvents(t, ll, expected, buf)
+}
+
+func TestLogLaneConstrainedLengthOff2(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll := NewLogLane(nil)
+	ll.SetLengthConstraint(25)
+	ll.SetLengthConstraint(0)
+
+	ll.Infof("the quick brown fox jumped over the lazy dog")
+
+	expected := "INFO {GUID} the quick brown fox jumped over the lazy dog"
+
+	verifyLogLaneEvents(t, ll, expected, buf)
+}
+
+func TestLogLaneConstrainedLengthOff3(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll := NewLogLane(nil)
+	ll.SetLengthConstraint(25)
+	ll.SetLengthConstraint(-1)
+
+	ll.Infof("the quick brown fox jumped over the lazy dog")
+
+	expected := "INFO {GUID} the quick brown fox jumped over the lazy dog"
+
+	verifyLogLaneEvents(t, ll, expected, buf)
+}
+
+func TestLogLaneConstrainedLengthStack(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll := NewLogLane(nil)
+	ll.SetLengthConstraint(10)
+	ll.LogStack("stack")
+
+	lines := strings.Split(buf.String(), "\n")
+	for _, line := range lines {
+		if line != "" && len(line) > 51 {
+			t.Errorf("line length %d wrong: %s", len(line), line)
+		}
+	}
+}
+
+func TestLogLaneConstrainedLengthInherit(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll := NewLogLane(nil)
+	old := ll.SetLengthConstraint(25)
+	if old != 0 {
+		t.Error("expected initial 0")
+	}
+
+	l2 := ll.Derive()
+
+	old = ll.SetLengthConstraint(20)
+	if old != 25 {
+		t.Error("expected 25")
+	}
+
+	l2.Infof("the quick brown fox jumped over the lazy dog")
+
+	expected := "INFO {GUID} the quick brown fox jump\u2026"
+
+	verifyLogLaneEvents(t, l2, expected, buf)
 }
 
 func TestLogLaneVerifyText(t *testing.T) {
@@ -2401,6 +2750,52 @@ func TestNullLaneEnableStack(t *testing.T) {
 	}
 }
 
+func TestNullLaneInheritStackTrace(t *testing.T) {
+	nl := NewNullLane(context.Background())
+
+	nl.EnableStackTrace(LogLevelError, true)
+	if !nl.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true")
+	}
+
+	nl2 := nl.Derive()
+	if !nl2.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on nl2")
+	}
+
+	nl3, _ := nl.DeriveWithCancel()
+	if !nl3.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on nl3")
+	}
+
+	nl4, _ := nl.DeriveWithCancelCause()
+	if !nl4.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on nl4")
+	}
+
+	nl5 := nl.DeriveWithoutCancel()
+	if !nl5.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on nl5")
+	}
+
+	nl6, _ := nl.DeriveWithTimeout(time.Hour)
+	if !nl6.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on nl6")
+	}
+
+	nl7, _ := nl.DeriveWithTimeoutCause(time.Hour, nil)
+	if !nl7.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on nl7")
+	}
+	nl8 := nl.DeriveReplaceContext(context.Background())
+	if !nl8.EnableStackTrace(LogLevelError, true) {
+		t.Error("expected true on nl8")
+	}
+	if nl8.EnableStackTrace(LogLevelDebug, true) {
+		t.Error("expected false on nl8 debug")
+	}
+}
+
 func TestDiskLane(t *testing.T) {
 	os.Remove("test.log")
 
@@ -2465,6 +2860,54 @@ func TestDiskLaneStack(t *testing.T) {
 	}
 
 	os.Remove("test.log")
+}
+
+func TestDiskLaneInheritStackTrace(t *testing.T) {
+	os.Remove("test.log")
+	dl, err := NewDiskLane(context.Background(), "test.log")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dl.EnableStackTrace(LogLevelTrace, true)
+	if !dl.EnableStackTrace(LogLevelTrace, true) {
+		t.Error("expected true")
+	}
+
+	dl2 := dl.Derive()
+	if !dl2.EnableStackTrace(LogLevelTrace, true) {
+		t.Error("expected true on dl2")
+	}
+
+	dl3, _ := dl.DeriveWithCancel()
+	if !dl3.EnableStackTrace(LogLevelTrace, true) {
+		t.Error("expected true on dl3")
+	}
+
+	dl4, _ := dl.DeriveWithCancelCause()
+	if !dl4.EnableStackTrace(LogLevelTrace, true) {
+		t.Error("expected true on dl4")
+	}
+
+	dl5 := dl.DeriveWithoutCancel()
+	if !dl5.EnableStackTrace(LogLevelTrace, true) {
+		t.Error("expected true on dl5")
+	}
+
+	dl6, _ := dl.DeriveWithTimeout(time.Hour)
+	if !dl6.EnableStackTrace(LogLevelTrace, true) {
+		t.Error("expected true on dl6")
+	}
+
+	dl7, _ := dl.DeriveWithTimeoutCause(time.Hour, nil)
+	if !dl7.EnableStackTrace(LogLevelTrace, true) {
+		t.Error("expected true on dl7")
+	}
+
+	dl8 := dl.DeriveReplaceContext(context.Background())
+	if !dl8.EnableStackTrace(LogLevelTrace, true) {
+		t.Error("expected true on dl8")
+	}
 }
 
 func TestDiskLaneBadPath(t *testing.T) {

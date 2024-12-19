@@ -207,6 +207,10 @@ The test lane includes a special option, `EnableSingleLineStackTrace()`, which l
 trace as a single test event. This creates a more predictable test event list compared to traditional
 stack traces, where each caller is logged as a separate event.
 
+# Max Message Length
+The length of a single log message can be length-constrained. Call `SetLengthConstraint()` to
+do that.
+
 # Panic Handler
 
 Fatal messages trigger a panic. In test code, the panic handler can be replaced to verify that a

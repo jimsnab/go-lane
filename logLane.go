@@ -38,6 +38,7 @@ type (
 		outer        Lane
 		parent       *logLane
 		onCreateLane OnCreateLane
+		maxLength    atomic.Int32
 	}
 
 	wrappedLogWriter struct {
@@ -157,6 +158,7 @@ func (ll *logLane) initialize(laneOuter Lane, pll *logLane, startingCtx context.
 		ll.wlog.SetFlags(pll.wlog.Flags())
 		ll.wlog.SetPrefix(pll.wlog.Prefix())
 		ll.onPanic = pll.onPanic
+		copyConfigToDerivation(ll, pll)
 	} else {
 		ll.wlog.SetFlags(log.LstdFlags)
 		ll.tees = []Lane{}
@@ -274,9 +276,19 @@ func (ll *logLane) printMsg(level LaneLogLevel, prefix string, teeFn func(l Lane
 	ll.tee(teeFn)
 }
 
+func (ll *logLane) Constrain(text string) string {
+	maxLen := ll.maxLength.Load()
+	if maxLen > 0 && len(text) > int(maxLen) {
+		text = text[:maxLen-1] + "\u2026"
+	}
+	return text
+}
+
 func (ll *logLane) printfMsg(level LaneLogLevel, prefix string, teeFn func(l Lane), formatStr string, args ...any) {
 	if ll.shouldLog(level) {
-		msg := fmt.Sprintf("%s %s", ll.getMesagePrefix(prefix), fmt.Sprintf(formatStr, args...))
+		text := ll.Constrain(fmt.Sprintf(formatStr, args...))
+
+		msg := fmt.Sprintf("%s %s", ll.getMesagePrefix(prefix), text)
 		if ll.cr != "" {
 			msg = strings.ReplaceAll(msg, "\r\n", "\n")
 			msg = strings.ReplaceAll(msg, "\n", ll.cr+"\n")
@@ -392,12 +404,12 @@ func (ll *logLane) logStack(message string, skipCallers int) {
 	skip := 3 + (skipCallers * 2)
 
 	if message != "" {
-		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("STACK"), message, ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("STACK"), ll.Constrain(message), ll.cr)
 	}
 
 	// each has two lines (the function name on one line, followed by source info on the next line)
 	for n := skip; n < len(lines); n++ {
-		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("STACK"), lines[n], ll.cr)
+		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("STACK"), ll.Constrain(lines[n]), ll.cr)
 	}
 }
 
@@ -410,6 +422,16 @@ func (ll *logLane) LogStackTrim(message string, skippedCallers int) {
 		ll.logStack(message, skippedCallers+1)
 	}
 	ll.tee(func(l Lane) { l.LogStackTrim(message, skippedCallers+3) })
+}
+
+func (ll *logLane) SetLengthConstraint(maxLength int) int {
+	old := ll.maxLength.Load()
+	if maxLength > 1 {
+		ll.maxLength.Store(int32(maxLength))
+	} else {
+		ll.maxLength.Store(0)
+	}
+	return int(old)
 }
 
 func (ll *logLane) Logger() *log.Logger {
