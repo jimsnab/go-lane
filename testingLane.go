@@ -43,6 +43,7 @@ type (
 
 	TestingLane interface {
 		Lane
+		laneInternal
 
 		// Renders all of the captured log messages into a single string.
 		EventsToString() string

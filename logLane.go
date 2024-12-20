@@ -16,6 +16,7 @@ import (
 type (
 	LogLane interface {
 		Lane
+		laneInternal
 		AddCR(shouldAdd bool) (prior bool)
 		SetFlagsMask(mask int) (prior int)
 	}
