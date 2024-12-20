@@ -133,6 +133,9 @@ generated, the lanes will be correlated with front-end logging.
 Another lane can "tee" from a source lane. For instance, you might tee a testing lane from a logging
 lane, allowing a unit test to verify that certain log messages are generated during the test.
 
+When a log message is sent to a tee, the receiving lane will log the journey and lane IDs using the
+originating IDs, and not the receiving lane's IDs.
+
 ## Utility Functions
 
 ### LogObject

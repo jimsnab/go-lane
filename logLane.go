@@ -11,8 +11,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 type (
@@ -165,8 +163,7 @@ func (ll *logLane) initialize(laneOuter Lane, pll *logLane, startingCtx context.
 		ll.cr = ""
 	}
 
-	id := uuid.New().String()
-	id = id[len(id)-10:]
+	id := makeLaneId()
 
 	// The context must have the correlation ID value set. The caller might also
 	// want another context feature such as WithCancel or WithDeadline. This requires
@@ -209,6 +206,9 @@ func NewLogLaneWithCR(ctx OptionalContext) Lane {
 
 // Adds an ID to the log message(s)
 func (ll *logLane) SetJourneyId(id string) {
+	ll.mu.Lock()
+	defer ll.mu.Unlock()
+
 	if len(id) > 10 {
 		ll.journeyId = id[:10]
 	} else {
@@ -230,14 +230,6 @@ func (ll *logLane) SetLogLevel(newLevel LaneLogLevel) (priorLevel LaneLogLevel) 
 	return
 }
 
-func (ll *logLane) getMesagePrefix(level string) string {
-	if ll.journeyId != "" {
-		return fmt.Sprintf("%s {%s:%s}", level, ll.journeyId, ll.LaneId())
-	} else {
-		return fmt.Sprintf("%s {%s}", level, ll.LaneId())
-	}
-}
-
 func (ll *logLane) shouldLog(level LaneLogLevel) bool {
 	if atomic.LoadInt32(&ll.level) <= int32(level) {
 		// the log wrapper is exposed to the client, so ensure changes
@@ -251,18 +243,19 @@ func (ll *logLane) shouldLog(level LaneLogLevel) bool {
 	return false
 }
 
-func (ll *logLane) tee(logger func(l Lane)) {
+func (ll *logLane) tee(props loggingProperties, logger teeHandler) {
 	ll.mu.Lock()
 	defer ll.mu.Unlock()
 
 	for _, t := range ll.tees {
-		logger(t)
+		receiver := t.(laneInternal)
+		logger(props, receiver)
 	}
 }
 
-func (ll *logLane) printMsg(level LaneLogLevel, prefix string, teeFn func(l Lane), args ...any) {
+func (ll *logLane) printMsg(props loggingProperties, level LaneLogLevel, prefix string, teeFn teeHandler, args ...any) {
 	if ll.shouldLog(level) {
-		msg := fmt.Sprintf("%s %s", ll.getMesagePrefix(prefix), sprint(args...))
+		msg := fmt.Sprintf("%s %s", props.getMessagePrefix(prefix), sprint(args...))
 		if ll.cr != "" {
 			msg = strings.ReplaceAll(msg, "\r\n", "\n")
 			msg = strings.ReplaceAll(msg, "\n", ll.cr+"\n")
@@ -271,9 +264,9 @@ func (ll *logLane) printMsg(level LaneLogLevel, prefix string, teeFn func(l Lane
 			}
 		}
 		ll.writer.Print(msg)
-		ll.logStackIf(level, "", 2)
+		ll.logStackIf(props, level, "", 0)
 	}
-	ll.tee(teeFn)
+	ll.tee(props, teeFn)
 }
 
 func (ll *logLane) Constrain(text string) string {
@@ -284,11 +277,11 @@ func (ll *logLane) Constrain(text string) string {
 	return text
 }
 
-func (ll *logLane) printfMsg(level LaneLogLevel, prefix string, teeFn func(l Lane), formatStr string, args ...any) {
+func (ll *logLane) printfMsg(props loggingProperties, level LaneLogLevel, prefix string, teeFn teeHandler, formatStr string, args ...any) {
 	if ll.shouldLog(level) {
 		text := ll.Constrain(fmt.Sprintf(formatStr, args...))
 
-		msg := fmt.Sprintf("%s %s", ll.getMesagePrefix(prefix), text)
+		msg := fmt.Sprintf("%s %s", props.getMessagePrefix(prefix), text)
 		if ll.cr != "" {
 			msg = strings.ReplaceAll(msg, "\r\n", "\n")
 			msg = strings.ReplaceAll(msg, "\n", ll.cr+"\n")
@@ -297,17 +290,26 @@ func (ll *logLane) printfMsg(level LaneLogLevel, prefix string, teeFn func(l Lan
 			}
 		}
 		ll.writer.Print(msg)
-		ll.logStackIf(level, "", 2)
+		ll.logStackIf(props, level, "", 0)
 	}
-	ll.tee(teeFn)
+	ll.tee(props, teeFn)
+}
+
+func (ll *logLane) LaneProps() loggingProperties {
+	ll.mu.Lock()
+	defer ll.mu.Unlock()
+	return loggingProperties{
+		laneId:    ll.LaneId(),
+		journeyId: ll.journeyId,
+	}
 }
 
 func (ll *logLane) Trace(args ...any) {
-	ll.printMsg(LogLevelTrace, "TRACE", func(l Lane) { l.Trace(args...) }, args...)
+	ll.TraceInternal(ll.LaneProps(), args...)
 }
 
 func (ll *logLane) Tracef(format string, args ...any) {
-	ll.printfMsg(LogLevelTrace, "TRACE", func(l Lane) { l.Tracef(format, args...) }, format, args...)
+	ll.TracefInternal(ll.LaneProps(), format, args...)
 }
 
 func (ll *logLane) TraceObject(message string, obj any) {
@@ -315,11 +317,11 @@ func (ll *logLane) TraceObject(message string, obj any) {
 }
 
 func (ll *logLane) Debug(args ...any) {
-	ll.printMsg(LogLevelDebug, "DEBUG", func(l Lane) { l.Debug(args...) }, args...)
+	ll.DebugInternal(ll.LaneProps(), args...)
 }
 
 func (ll *logLane) Debugf(format string, args ...any) {
-	ll.printfMsg(LogLevelDebug, "DEBUG", func(l Lane) { l.Debugf(format, args...) }, format, args...)
+	ll.DebugfInternal(ll.LaneProps(), format, args...)
 }
 
 func (ll *logLane) DebugObject(message string, obj any) {
@@ -327,11 +329,11 @@ func (ll *logLane) DebugObject(message string, obj any) {
 }
 
 func (ll *logLane) Info(args ...any) {
-	ll.printMsg(LogLevelInfo, "INFO", func(l Lane) { l.Info(args...) }, args...)
+	ll.InfoInternal(ll.LaneProps(), args...)
 }
 
 func (ll *logLane) Infof(format string, args ...any) {
-	ll.printfMsg(LogLevelInfo, "INFO", func(l Lane) { l.Infof(format, args...) }, format, args...)
+	ll.InfofInternal(ll.LaneProps(), format, args...)
 }
 
 func (ll *logLane) InfoObject(message string, obj any) {
@@ -339,11 +341,11 @@ func (ll *logLane) InfoObject(message string, obj any) {
 }
 
 func (ll *logLane) Warn(args ...any) {
-	ll.printMsg(LogLevelWarn, "WARN", func(l Lane) { l.Warn(args...) }, args...)
+	ll.WarnInternal(ll.LaneProps(), args...)
 }
 
 func (ll *logLane) Warnf(format string, args ...any) {
-	ll.printfMsg(LogLevelWarn, "WARN", func(l Lane) { l.Warnf(format, args...) }, format, args...)
+	ll.WarnfInternal(ll.LaneProps(), format, args...)
 }
 
 func (ll *logLane) WarnObject(message string, obj any) {
@@ -351,11 +353,11 @@ func (ll *logLane) WarnObject(message string, obj any) {
 }
 
 func (ll *logLane) Error(args ...any) {
-	ll.printMsg(LogLevelError, "ERROR", func(l Lane) { l.Error(args...) }, args...)
+	ll.ErrorInternal(ll.LaneProps(), args...)
 }
 
 func (ll *logLane) Errorf(format string, args ...any) {
-	ll.printfMsg(LogLevelError, "ERROR", func(l Lane) { l.Errorf(format, args...) }, format, args...)
+	ll.ErrorfInternal(ll.LaneProps(), format, args...)
 }
 
 func (ll *logLane) ErrorObject(message string, obj any) {
@@ -363,11 +365,11 @@ func (ll *logLane) ErrorObject(message string, obj any) {
 }
 
 func (ll *logLane) PreFatal(args ...any) {
-	ll.printMsg(LogLevelFatal, "FATAL", func(l Lane) { l.PreFatal(args...) }, args...)
+	ll.PreFatalInternal(ll.LaneProps(), args...)
 }
 
 func (ll *logLane) PreFatalf(format string, args ...any) {
-	ll.printfMsg(LogLevelFatal, "FATAL", func(l Lane) { l.PreFatalf(format, args...) }, format, args...)
+	ll.PreFatalfInternal(ll.LaneProps(), format, args...)
 }
 
 func (ll *logLane) PreFatalObject(message string, obj any) {
@@ -375,12 +377,12 @@ func (ll *logLane) PreFatalObject(message string, obj any) {
 }
 
 func (ll *logLane) Fatal(args ...any) {
-	ll.PreFatal(args...)
+	ll.FatalInternal(ll.LaneProps(), args...)
 	ll.onPanic()
 }
 
 func (ll *logLane) Fatalf(format string, args ...any) {
-	ll.PreFatalf(format, args...)
+	ll.FatalfInternal(ll.LaneProps(), format, args...)
 	ll.onPanic()
 }
 
@@ -389,27 +391,24 @@ func (ll *logLane) FatalObject(message string, obj any) {
 	ll.onPanic()
 }
 
-func (ll *logLane) logStackIf(level LaneLogLevel, message string, skipCallers int) {
+func (ll *logLane) logStackIf(props loggingProperties, level LaneLogLevel, message string, skipCallers int) {
 	if ll.stackTrace[level].Load() && level != LogLevelStack {
-		// skip lines: the first line (goroutine label), plus the LogStack() and logging API
-		ll.logStack(message, skipCallers+1)
+		ll.logStack(props, message, skipCallers)
 	}
 }
 
-func (ll *logLane) logStack(message string, skipCallers int) {
+func (ll *logLane) logStack(props loggingProperties, message string, skipCallers int) {
 	buf := make([]byte, 16384)
 	n := runtime.Stack(buf, false)
-	lines := strings.Split(strings.TrimSpace(string(buf[0:n])), "\n")
-
-	skip := 3 + (skipCallers * 2)
+	lines := cleanStack(buf[:n], skipCallers)
 
 	if message != "" {
-		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("STACK"), ll.Constrain(message), ll.cr)
+		ll.writer.Printf("%s %s%s", props.getMessagePrefix("STACK"), ll.Constrain(message), ll.cr)
 	}
 
 	// each has two lines (the function name on one line, followed by source info on the next line)
-	for n := skip; n < len(lines); n++ {
-		ll.writer.Printf("%s %s%s", ll.getMesagePrefix("STACK"), ll.Constrain(lines[n]), ll.cr)
+	for _, line := range lines {
+		ll.writer.Printf("%s %s%s", props.getMessagePrefix("STACK"), ll.Constrain(line), ll.cr)
 	}
 }
 
@@ -418,10 +417,7 @@ func (ll *logLane) LogStack(message string) {
 }
 
 func (ll *logLane) LogStackTrim(message string, skippedCallers int) {
-	if ll.shouldLog(LogLevelStack) {
-		ll.logStack(message, skippedCallers+1)
-	}
-	ll.tee(func(l Lane) { l.LogStackTrim(message, skippedCallers+3) })
+	ll.LogStackTrimInternal(ll.LaneProps(), message, skippedCallers)
 }
 
 func (ll *logLane) SetLengthConstraint(maxLength int) int {
@@ -575,6 +571,12 @@ func (ll *logLane) EnableStackTrace(level LaneLogLevel, enable bool) bool {
 
 func (ll *logLane) AddTee(l Lane) {
 	ll.mu.Lock()
+	for _, t := range ll.tees {
+		if t.LaneId() == l.LaneId() {
+			// can't create a cyclical tee
+			panic("tee points to itself")
+		}
+	}
 	ll.tees = append(ll.tees, l)
 	ll.mu.Unlock()
 }
@@ -654,4 +656,71 @@ func (ll *logLane) Parent() Lane {
 		return ll.parent
 	}
 	return nil // untyped nil
+}
+
+func (ll *logLane) TraceInternal(props loggingProperties, args ...any) {
+	ll.printMsg(props, LogLevelTrace, "TRACE", func(teeProps loggingProperties, li laneInternal) { li.TraceInternal(teeProps, args...) }, args...)
+}
+
+func (ll *logLane) TracefInternal(props loggingProperties, format string, args ...any) {
+	ll.printfMsg(props, LogLevelTrace, "TRACE", func(teeProps loggingProperties, li laneInternal) { li.TracefInternal(teeProps, format, args...) }, format, args...)
+}
+
+func (ll *logLane) DebugInternal(props loggingProperties, args ...any) {
+	ll.printMsg(props, LogLevelDebug, "DEBUG", func(teeProps loggingProperties, li laneInternal) { li.DebugInternal(teeProps, args...) }, args...)
+}
+
+func (ll *logLane) DebugfInternal(props loggingProperties, format string, args ...any) {
+	ll.printfMsg(props, LogLevelDebug, "DEBUG", func(teeProps loggingProperties, li laneInternal) { li.DebugfInternal(teeProps, format, args...) }, format, args...)
+}
+
+func (ll *logLane) InfoInternal(props loggingProperties, args ...any) {
+	ll.printMsg(props, LogLevelInfo, "INFO", func(teeProps loggingProperties, li laneInternal) { li.InfoInternal(teeProps, args...) }, args...)
+}
+
+func (ll *logLane) InfofInternal(props loggingProperties, format string, args ...any) {
+	ll.printfMsg(props, LogLevelInfo, "INFO", func(teeProps loggingProperties, li laneInternal) { li.InfofInternal(teeProps, format, args...) }, format, args...)
+}
+
+func (ll *logLane) WarnInternal(props loggingProperties, args ...any) {
+	ll.printMsg(props, LogLevelWarn, "WARN", func(teeProps loggingProperties, li laneInternal) { li.WarnInternal(teeProps, args...) }, args...)
+}
+
+func (ll *logLane) WarnfInternal(props loggingProperties, format string, args ...any) {
+	ll.printfMsg(props, LogLevelWarn, "WARN", func(teeProps loggingProperties, li laneInternal) { li.WarnfInternal(teeProps, format, args...) }, format, args...)
+}
+
+func (ll *logLane) ErrorInternal(props loggingProperties, args ...any) {
+	ll.printMsg(props, LogLevelError, "ERROR", func(teeProps loggingProperties, li laneInternal) { li.ErrorInternal(teeProps, args...) }, args...)
+}
+
+func (ll *logLane) ErrorfInternal(props loggingProperties, format string, args ...any) {
+	ll.printfMsg(props, LogLevelError, "ERROR", func(teeProps loggingProperties, li laneInternal) { li.ErrorfInternal(teeProps, format, args...) }, format, args...)
+}
+
+func (ll *logLane) PreFatalInternal(props loggingProperties, args ...any) {
+	ll.printMsg(ll.LaneProps(), LogLevelFatal, "FATAL", func(teeProps loggingProperties, li laneInternal) { li.PreFatalInternal(teeProps, args...) }, args...)
+}
+
+func (ll *logLane) PreFatalfInternal(props loggingProperties, format string, args ...any) {
+	ll.printfMsg(ll.LaneProps(), LogLevelFatal, "FATAL", func(teeProps loggingProperties, li laneInternal) { li.PreFatalfInternal(teeProps, format, args...) }, format, args...)
+}
+
+func (ll *logLane) FatalInternal(props loggingProperties, args ...any) {
+	ll.PreFatalInternal(props, args...)
+	// panic will happen in a moment on the externally called Fatal()
+}
+
+func (ll *logLane) FatalfInternal(props loggingProperties, format string, args ...any) {
+	ll.PreFatalfInternal(props, format, args...)
+	// panic will happen in a moment on the externally called Fatalf()
+}
+
+func (ll *logLane) LogStackTrimInternal(props loggingProperties, message string, skippedCallers int) {
+	if ll.shouldLog(LogLevelStack) {
+		ll.logStack(props, message, skippedCallers)
+	}
+	ll.tee(props, func(teeProps loggingProperties, li laneInternal) {
+		li.LogStackTrimInternal(teeProps, message, skippedCallers)
+	})
 }

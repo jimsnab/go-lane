@@ -6,8 +6,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 const null_lane_id = nullContext("null_lane_id")
@@ -54,7 +52,7 @@ func deriveNullLane(parent Lane, ctx context.Context, tees []Lane, onPanic Panic
 	wnw := wrappedNullWriter{nl: &nl}
 	nl.wlog = log.New(&wnw, "", 0)
 
-	nl.Context = context.WithValue(ctx, null_lane_id, uuid.New().String())
+	nl.Context = context.WithValue(ctx, null_lane_id, makeLaneId())
 
 	copyConfigToDerivation(&nl, parent)
 	return &nl
@@ -73,60 +71,70 @@ func (nl *nullLane) SetLogLevel(newLevel LaneLogLevel) (priorLevel LaneLogLevel)
 	return
 }
 
-func (nl *nullLane) tee(logger func(l Lane)) {
+func (nl *nullLane) tee(props loggingProperties, logger teeHandler) {
 	nl.mu.Lock()
 	defer nl.mu.Unlock()
 
 	for _, t := range nl.tees {
-		logger(t)
+		receiver := t.(laneInternal)
+		logger(props, receiver)
 	}
 }
 
-func (nl *nullLane) Trace(args ...any) { nl.tee(func(l Lane) { l.Trace(args...) }) }
+func (nl *nullLane) LaneProps() loggingProperties {
+	nl.mu.Lock()
+	defer nl.mu.Unlock()
+	return loggingProperties{
+		laneId:    nl.LaneId(),
+		journeyId: nl.journeyId,
+	}
+}
+
+func (nl *nullLane) Trace(args ...any) { nl.TraceInternal(nl.LaneProps(), args...) }
 func (nl *nullLane) Tracef(format string, args ...any) {
-	nl.tee(func(l Lane) { l.Tracef(format, args...) })
+	nl.TracefInternal(nl.LaneProps(), format, args...)
 }
 func (nl *nullLane) TraceObject(message string, obj any) {
 	LogObject(nl, LogLevelTrace, message, obj)
 }
-func (nl *nullLane) Debug(args ...any) { nl.tee(func(l Lane) { l.Debug(args...) }) }
+func (nl *nullLane) Debug(args ...any) { nl.DebugInternal(nl.LaneProps(), args...) }
 func (nl *nullLane) Debugf(format string, args ...any) {
-	nl.tee(func(l Lane) { l.Debugf(format, args...) })
+	nl.DebugfInternal(nl.LaneProps(), format, args...)
 }
 func (nl *nullLane) DebugObject(message string, obj any) {
 	LogObject(nl, LogLevelDebug, message, obj)
 }
-func (nl *nullLane) Info(args ...any) { nl.tee(func(l Lane) { l.Info(args...) }) }
+func (nl *nullLane) Info(args ...any) { nl.InfoInternal(nl.LaneProps(), args...) }
 func (nl *nullLane) Infof(format string, args ...any) {
-	nl.tee(func(l Lane) { l.Infof(format, args...) })
+	nl.InfofInternal(nl.LaneProps(), format, args...)
 }
 func (nl *nullLane) InfoObject(message string, obj any) {
 	LogObject(nl, LogLevelInfo, message, obj)
 }
-func (nl *nullLane) Warn(args ...any) { nl.tee(func(l Lane) { l.Warn(args...) }) }
+func (nl *nullLane) Warn(args ...any) { nl.WarnInternal(nl.LaneProps(), args...) }
 func (nl *nullLane) Warnf(format string, args ...any) {
-	nl.tee(func(l Lane) { l.Warnf(format, args...) })
+	nl.WarnfInternal(nl.LaneProps(), format, args...)
 }
 func (nl *nullLane) WarnObject(message string, obj any) {
 	LogObject(nl, LogLevelWarn, message, obj)
 }
-func (nl *nullLane) Error(args ...any) { nl.tee(func(l Lane) { l.Error(args...) }) }
+func (nl *nullLane) Error(args ...any) { nl.ErrorInternal(nl.LaneProps(), args...) }
 func (nl *nullLane) Errorf(format string, args ...any) {
-	nl.tee(func(l Lane) { l.Errorf(format, args...) })
+	nl.ErrorfInternal(nl.LaneProps(), format, args...)
 }
 func (nl *nullLane) ErrorObject(message string, obj any) {
 	LogObject(nl, LogLevelError, message, obj)
 }
-func (nl *nullLane) PreFatal(args ...any) { nl.tee(func(l Lane) { l.PreFatal(args...) }) }
+func (nl *nullLane) PreFatal(args ...any) { nl.PreFatalInternal(nl.LaneProps(), args...) }
 func (nl *nullLane) PreFatalf(format string, args ...any) {
-	nl.tee(func(l Lane) { l.PreFatalf(format, args...) })
+	nl.PreFatalfInternal(nl.LaneProps(), format, args...)
 }
 func (nl *nullLane) PreFatalObject(message string, obj any) {
 	LogObject(nl, logLevelPreFatal, message, obj)
 }
-func (nl *nullLane) Fatal(args ...any) { nl.PreFatal(args...); nl.onPanic() }
+func (nl *nullLane) Fatal(args ...any) { nl.FatalInternal(nl.LaneProps(), args...); nl.onPanic() }
 func (nl *nullLane) Fatalf(format string, args ...any) {
-	nl.PreFatalf(format, args...)
+	nl.FatalfInternal(nl.LaneProps(), format, args...)
 	nl.onPanic()
 }
 func (nl *nullLane) FatalObject(message string, obj any) {
@@ -134,11 +142,11 @@ func (nl *nullLane) FatalObject(message string, obj any) {
 }
 
 func (nl *nullLane) LogStack(message string) {
-	nl.tee(func(l Lane) { l.LogStackTrim(message, 3) })
+	nl.LogStackTrim(message, 1)
 }
 
 func (nl *nullLane) LogStackTrim(message string, skippedCallers int) {
-	nl.tee(func(l Lane) { l.LogStackTrim(message, skippedCallers+3) })
+	nl.LogStackTrimInternal(nl.LaneProps(), message, skippedCallers)
 }
 
 func (nl *nullLane) SetLengthConstraint(maxLength int) int {
@@ -287,4 +295,55 @@ func (nl *nullLane) Parent() Lane {
 		return nl.parent
 	}
 	return nil // untyped nil
+}
+
+func (nl *nullLane) TraceInternal(props loggingProperties, args ...any) {
+	nl.tee(props, func(teeProps loggingProperties, li laneInternal) { li.TraceInternal(teeProps, args...) })
+}
+func (nl *nullLane) TracefInternal(props loggingProperties, format string, args ...any) {
+	nl.tee(props, func(teeProps loggingProperties, li laneInternal) { li.TracefInternal(teeProps, format, args...) })
+}
+func (nl *nullLane) DebugInternal(props loggingProperties, args ...any) {
+	nl.tee(props, func(teeProps loggingProperties, li laneInternal) { li.DebugInternal(teeProps, args...) })
+}
+func (nl *nullLane) DebugfInternal(props loggingProperties, format string, args ...any) {
+	nl.tee(props, func(teeProps loggingProperties, li laneInternal) { li.DebugfInternal(teeProps, format, args...) })
+}
+func (nl *nullLane) InfoInternal(props loggingProperties, args ...any) {
+	nl.tee(props, func(teeProps loggingProperties, li laneInternal) { li.InfoInternal(teeProps, args...) })
+}
+func (nl *nullLane) InfofInternal(props loggingProperties, format string, args ...any) {
+	nl.tee(props, func(teeProps loggingProperties, li laneInternal) { li.InfofInternal(teeProps, format, args...) })
+}
+func (nl *nullLane) WarnInternal(props loggingProperties, args ...any) {
+	nl.tee(props, func(teeProps loggingProperties, li laneInternal) { li.WarnInternal(teeProps, args...) })
+}
+func (nl *nullLane) WarnfInternal(props loggingProperties, format string, args ...any) {
+	nl.tee(props, func(teeProps loggingProperties, li laneInternal) { li.WarnfInternal(teeProps, format, args...) })
+}
+func (nl *nullLane) ErrorInternal(props loggingProperties, args ...any) {
+	nl.tee(props, func(teeProps loggingProperties, li laneInternal) { li.ErrorInternal(teeProps, args...) })
+}
+func (nl *nullLane) ErrorfInternal(props loggingProperties, format string, args ...any) {
+	nl.tee(props, func(teeProps loggingProperties, li laneInternal) { li.ErrorfInternal(teeProps, format, args...) })
+}
+func (nl *nullLane) PreFatalInternal(props loggingProperties, args ...any) {
+	nl.tee(props, func(teeProps loggingProperties, li laneInternal) { li.PreFatalInternal(teeProps, args...) })
+}
+func (nl *nullLane) PreFatalfInternal(props loggingProperties, format string, args ...any) {
+	nl.tee(props, func(teeProps loggingProperties, li laneInternal) { li.PreFatalfInternal(teeProps, format, args...) })
+}
+func (nl *nullLane) FatalInternal(props loggingProperties, args ...any) {
+	nl.PreFatalInternal(props, args...)
+	// panic will occur in a moment in the externally called Fatalf
+}
+func (nl *nullLane) FatalfInternal(props loggingProperties, format string, args ...any) {
+	nl.PreFatalfInternal(props, format, args...)
+	// panic will occur in a moment in the externally called Fatalf
+}
+
+func (nl *nullLane) LogStackTrimInternal(props loggingProperties, message string, skippedCallers int) {
+	nl.tee(nl.LaneProps(), func(teeProps loggingProperties, li laneInternal) {
+		li.LogStackTrimInternal(teeProps, message, skippedCallers)
+	})
 }

@@ -1,7 +1,12 @@
 package lane
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"log"
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -702,5 +707,260 @@ func TestTestingLaneMetadata(t *testing.T) {
 	}
 	if tl2.GetMetadata("teed") != "tee" {
 		t.Fatal("expected teed testing lane metadata")
+	}
+}
+
+func TestTeeRetainLaneIds(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+
+	ll := NewLogLane(context.Background())
+	ll.AddTee(tl)
+	ll.SetJourneyId("journey")
+
+	ll.Info("test")
+	tl.Info("test2")
+
+	ptl := tl.(*testingLane)
+	if len(ptl.Events) != 2 {
+		t.Fatal("expected 2 events")
+	}
+
+	if ptl.Events[0].Id != ll.LaneId() {
+		t.Error("wrong ID for event 1")
+	}
+
+	if ptl.Events[1].Id != tl.LaneId() {
+		t.Error("wrong ID for event 2")
+	}
+}
+
+func TestLogLaneRetainJourney(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	nl := NewNullLane(nil)
+	ll := NewLogLane(nil)
+	nl.AddTee(ll)
+
+	nl2 := nl.Derive()
+	nl2.SetJourneyId("journey")
+
+	nl2.Info("test")
+	nl.Info("server")
+
+	output := buf.String()
+	if !strings.Contains(output, " INFO {journey:") {
+		t.Error("missing journey ID")
+	}
+	if !strings.Contains(output, fmt.Sprintf(":%s} test", nl2.LaneId())) {
+		t.Error("missing lane ID")
+	}
+	if !strings.Contains(output, fmt.Sprintf(" INFO {%s} server", nl.LaneId())) {
+		t.Error("missing server lane ID")
+	}
+}
+
+func TestLogLaneRetainIdsWithStack(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	nl := NewNullLane(nil)
+	ll := NewLogLane(nil)
+	nl.AddTee(ll)
+
+	nl2 := nl.Derive()
+	nl2.SetJourneyId("journey")
+	nl2.EnableStackTrace(LogLevelInfo, true)
+
+	nl2.Info("test")
+	nl.Info("server")
+
+	// verify sending message into null lane was processed by the log lane and IDs were retained
+
+	output := buf.String()
+	if !strings.Contains(output, " INFO {journey:") {
+		t.Error("missing journey ID")
+	}
+	if !strings.Contains(output, fmt.Sprintf(":%s} test", nl2.LaneId())) {
+		t.Error("missing lane ID")
+	}
+	if !strings.Contains(output, fmt.Sprintf(" INFO {%s} server", nl.LaneId())) {
+		t.Error("missing server lane ID")
+	}
+}
+
+func TestLogLaneRetainIdsWithStack2(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	tl := NewTestingLane(nil)
+	ll := NewLogLane(nil)
+	tl.AddTee(ll)
+
+	tl2 := tl.Derive()
+	tl2.SetJourneyId("journey")
+	tl2.EnableStackTrace(LogLevelInfo, true)
+
+	tl2.Info("test")
+	tl.Info("server")
+
+	// verify sending message into testing lane was processed by the log lane and IDs were retained
+
+	output := buf.String()
+	if !strings.Contains(output, " INFO {journey:") {
+		t.Error("missing journey ID")
+	}
+	if !strings.Contains(output, fmt.Sprintf(":%s} test", tl2.LaneId())) {
+		t.Error("missing lane ID")
+	}
+	if !strings.Contains(output, fmt.Sprintf(" INFO {%s} server", tl.LaneId())) {
+		t.Error("missing server lane ID")
+	}
+}
+
+func TestLogLaneRetainIdsWithStack3(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll := NewLogLane(nil)
+	tl := NewTestingLane(nil)
+	tl.WantDescendantEvents(true)
+	ll.AddTee(tl)
+
+	ll2 := ll.Derive()
+	ll2.SetJourneyId("journey")
+	ll2.EnableStackTrace(LogLevelInfo, true)
+
+	ll2.Info("test")
+	ll.Info("server")
+
+	// verify stack is logged and seen in the stdout, but not included in the testing lane
+
+	output := buf.String()
+	if !strings.Contains(output, " INFO {journey:") {
+		t.Error("missing journey ID")
+	}
+	if !strings.Contains(output, fmt.Sprintf(":%s} test", ll2.LaneId())) {
+		t.Error("missing lane ID")
+	}
+	if !strings.Contains(output, fmt.Sprintf("STACK {journey:%s} ", ll2.LaneId())) {
+		t.Error("missing stack")
+	}
+	if !strings.Contains(output, fmt.Sprintf(" INFO {%s} server", ll.LaneId())) {
+		t.Error("missing server lane ID")
+	}
+
+	if !tl.VerifyEventText("INFO\ttest\nINFO\tserver") {
+		t.Error("didnt' get expected testing output")
+	}
+}
+
+func TestLogLaneRetainIdsWithStack4(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	ll := NewLogLane(nil)
+	tl := NewTestingLane(nil)
+	tl.WantDescendantEvents(true)
+	tl.EnableStackTrace(LogLevelInfo, true)
+	ll.AddTee(tl)
+
+	ll2 := ll.Derive()
+	ll2.SetJourneyId("journey")
+
+	ll2.Info("test")
+	ll.Info("server")
+
+	// verify stack is not seen in the stdout, and is still not included in the testing lane
+
+	output := buf.String()
+	if !strings.Contains(output, " INFO {journey:") {
+		t.Error("missing journey ID")
+	}
+	if !strings.Contains(output, fmt.Sprintf(":%s} test", ll2.LaneId())) {
+		t.Error("missing lane ID")
+	}
+	if strings.Contains(output, fmt.Sprintf("STACK {journey:%s} ", ll2.LaneId())) {
+		t.Error("unexpected stack")
+	}
+	if !strings.Contains(output, fmt.Sprintf(" INFO {%s} server", ll.LaneId())) {
+		t.Error("missing server lane ID")
+	}
+
+	if !tl.VerifyEventText("INFO\ttest\nINFO\tserver") {
+		t.Error("didnt' get expected testing output")
+	}
+}
+
+func TestLogLaneRetainIdsWithSecondStack(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	serverLane := NewLogLane(nil)
+	requestLane := NewLogLane(nil)
+	requestLane.AddTee(serverLane)
+
+	serverLane.EnableStackTrace(LogLevelInfo, true)
+	requestLane.EnableStackTrace(LogLevelInfo, true)
+
+	requestLane.Info("test")
+
+	// verify stack is logged and seen in the stdout twice
+
+	output := buf.String()
+	lines := strings.Split(output, "\n")
+	pos := verifyStackName(t, lines, 0, "test", "TestLogLaneRetainIdsWithSecondStack")
+	verifyStackName(t, lines, pos, "test", "TestLogLaneRetainIdsWithSecondStack")
+}
+
+func verifyStackName(t *testing.T, lines []string, start int, msg, name string) int {
+	if len(lines) < start {
+		t.Fatal("not enough output lines")
+	}
+	if !strings.HasSuffix(lines[start], msg) {
+		t.Errorf("line %s does not end with %s", lines[start], msg)
+	}
+	start++
+	if !strings.Contains(lines[start], " STACK ") {
+		t.Errorf("line %s is not STACK", lines[start])
+	} else if !strings.Contains(lines[start], name) {
+		t.Errorf("line %s is not fn %s", lines[start], name+"(0x")
+	}
+
+	for start < len(lines) {
+		if !strings.Contains(lines[start], " STACK ") {
+			break
+		}
+		start++
+	}
+
+	return start
+}
+
+func TestLogLaneRetainIdsWithObjectLog(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	obj := map[string]string{"cat": "meow", "dog": "bark"}
+
+	nl := NewNullLane(nil)
+	ll := NewLogLane(nil)
+	nl.SetJourneyId("journey")
+	nl.AddTee(ll)
+
+	nl.InfoObject("obj", obj)
+
+	// verify logging obj in null lane was processed by the log lane and IDs were retained
+
+	output := buf.String()
+	if !strings.Contains(output, fmt.Sprintf(`INFO {journey:%s} obj: {"cat":"meow","dog":"bark"}`, nl.LaneId())) {
+		t.Error("not the expected log output")
 	}
 }

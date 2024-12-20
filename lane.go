@@ -145,7 +145,9 @@ type (
 		// Turns on stack trace logging.
 		EnableStackTrace(level LaneLogLevel, enable bool) (wasEnabled bool)
 
-		// Replicates the logging activity in another lane.
+		// AddTee attaches a receiver lane to the sender lane. Log messages from the sender lane are
+		// forwarded to the receiver lane [l], but retain the sender lane's lane ID and journey ID
+		// instead of the receiver's IDs.
 		AddTee(l Lane)
 
 		// Disconnects the other lane from the tee.
@@ -168,5 +170,37 @@ type (
 	// functions for internal implementation
 	laneInternal interface {
 		Constrain(msg string) string
+
+		LaneProps() loggingProperties
+
+		TraceInternal(props loggingProperties, args ...any)
+		TracefInternal(props loggingProperties, format string, args ...any)
+
+		DebugInternal(props loggingProperties, args ...any)
+		DebugfInternal(props loggingProperties, format string, args ...any)
+
+		InfoInternal(props loggingProperties, args ...any)
+		InfofInternal(props loggingProperties, format string, args ...any)
+
+		WarnInternal(props loggingProperties, args ...any)
+		WarnfInternal(props loggingProperties, format string, args ...any)
+
+		ErrorInternal(props loggingProperties, args ...any)
+		ErrorfInternal(props loggingProperties, format string, args ...any)
+
+		PreFatalInternal(props loggingProperties, args ...any)
+		PreFatalfInternal(props loggingProperties, format string, args ...any)
+
+		FatalInternal(props loggingProperties, args ...any)
+		FatalfInternal(props loggingProperties, format string, args ...any)
+
+		LogStackTrimInternal(props loggingProperties, message string, skippedCallers int)
 	}
+
+	loggingProperties struct {
+		laneId    string
+		journeyId string
+	}
+
+	teeHandler func(props loggingProperties, receiver laneInternal)
 )

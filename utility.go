@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"unsafe"
+
+	"github.com/google/uuid"
 )
 
 type (
@@ -25,6 +27,12 @@ const (
 
 // Logs an entire object.
 func LogObject(l Lane, level LaneLogLevel, message string, obj any) {
+	li := l.(laneInternal)
+
+	logObjectInternal(li.LaneProps(), li, level, message, obj)
+}
+
+func logObjectInternal(props loggingProperties, li laneInternal, level LaneLogLevel, message string, obj any) {
 	// Convert the entire object (public and private values) to public
 	o := CaptureObject(obj)
 
@@ -34,24 +42,23 @@ func LogObject(l Lane, level LaneLogLevel, message string, obj any) {
 	}
 	enc := fmt.Sprintf("%s: %s", message, string(raw))
 
-	li := l.(laneInternal)
 	enc = li.Constrain(enc)
 
 	switch level {
 	case LogLevelTrace:
-		l.Trace(enc)
+		li.TraceInternal(props, enc)
 	case LogLevelDebug:
-		l.Debug(enc)
+		li.DebugInternal(props, enc)
 	case LogLevelInfo:
-		l.Info(enc)
+		li.InfoInternal(props, enc)
 	case LogLevelWarn:
-		l.Warn(enc)
+		li.WarnInternal(props, enc)
 	case LogLevelError:
-		l.Error(enc)
+		li.ErrorInternal(props, enc)
 	case logLevelPreFatal:
-		l.PreFatal(enc)
+		li.PreFatalInternal(props, enc)
 	case LogLevelFatal:
-		l.Fatal(enc)
+		li.FatalInternal(props, enc)
 	default:
 		panic("invalid level argument")
 	}
@@ -306,4 +313,53 @@ func isNil(i any) bool {
 	default:
 		return false
 	}
+}
+
+func (props loggingProperties) getMessagePrefix(level string) string {
+	if props.journeyId != "" {
+		return fmt.Sprintf("%s {%s:%s}", level, props.journeyId, props.laneId)
+	} else {
+		return fmt.Sprintf("%s {%s}", level, props.laneId)
+	}
+}
+
+func makeLaneId() string {
+	id := uuid.New().String()
+	id = id[len(id)-10:]
+
+	return id
+}
+
+func cleanStack(buf []byte, skipCallers int) (lines []string) {
+	full := strings.Split(strings.TrimSpace(string(buf)), "\n")
+
+	// the top line is a title of some kind like "goroutine 7 [running]", so skip that
+	top := 1
+
+	// next skip all of the go-lane implementation
+	for top < len(full) {
+		line := full[top]
+		if !strings.Contains(line, "go-lane.(*") {
+			break
+		}
+		top += 2
+	}
+
+	// skip past the unwanted callers as requested by the client
+	top += skipCallers * 2
+	if len(full) < top {
+		return
+	}
+
+	// trim ending whitespace
+	bottom := len(full)
+	for bottom > top {
+		if full[bottom-1] != "" {
+			break
+		}
+		bottom--
+	}
+
+	lines = full[top:bottom]
+	return
 }
