@@ -66,6 +66,9 @@ type (
 		// are ignored.
 		FindEventText(eventText string) (found bool)
 
+		// Checks if the string occurs anywhere in the logged text
+		Contains(text string) (found bool)
+
 		// Controls whether to capture child lane activity (wanted=true) or not.
 		WantDescendantEvents(wanted bool) (prior bool)
 
@@ -235,6 +238,16 @@ func (tl *testingLane) EventsToString() string {
 	}
 
 	return sb.String()
+}
+
+func (tl *testingLane) Contains(text string) bool {
+	for _, e := range tl.Events {
+		if strings.Contains(e.Message, text) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (tl *testingLane) WantDescendantEvents(wanted bool) bool {

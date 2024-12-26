@@ -179,6 +179,7 @@ Only the changed fields are logged. Notice Texas is not shown in the change.
   - `VerifyEvents()`, `VerifyEventText()` - check for exact log messages
   - `FindEvents()`, `FindEventText()` - check logged messages for specific logging events
   - `EventsToString()` - stringify the logged messages for verification by the unit test
+  - `Contains()` - checks if text is found in any captured log message
 
   A testing lane also has the API `WantDescendantEvents()` to enable (or disable) capture of
   derived testing lane activity. This is useful to verify a child task reaches an expected

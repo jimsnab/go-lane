@@ -267,6 +267,14 @@ func TestLaneWithoutCancel(t *testing.T) {
 		t.Error("didn't see tl3 log text")
 	}
 
+	if tl.Contains("INFO\tnot canceled") {
+		t.Error("shouldn't have found INFO tag")
+	}
+
+	if !tl.Contains("ot cancele") {
+		t.Errorf("should have found part of a message")
+	}
+
 	select {
 	case <-tl3.Done():
 		t.Error("tl3 must not be done")
