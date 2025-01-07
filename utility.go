@@ -245,7 +245,7 @@ func innerValue(val reflect.Value, addrs map[uintptr]recursionType) (inner any) 
 		break
 
 	default:
-		panic("can't process type combination")
+		panic("can't process type combination " + val.Kind().String())
 	}
 
 	if pointerTarget != 0 {
