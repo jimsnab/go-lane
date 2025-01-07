@@ -59,6 +59,7 @@ func logObjectInternal(props loggingProperties, li laneInternal, level LaneLogLe
 		li.PreFatalInternal(props, enc)
 	case LogLevelFatal:
 		li.FatalInternal(props, enc)
+		li.OnPanic()
 	default:
 		panic("invalid level argument")
 	}
@@ -69,7 +70,11 @@ func captureAddrs(val reflect.Value, addrs map[uintptr]recursionType) (showAddrs
 	if val.Kind() == reflect.Pointer {
 		addr = val.Pointer()
 	} else if val.Kind() == reflect.UnsafePointer {
-		addr = val.UnsafeAddr()
+		if val.CanAddr() {
+			addr = val.UnsafeAddr()
+		} else {
+			addr = val.Pointer()
+		}
 	}
 
 	if addr != 0 {
@@ -114,13 +119,17 @@ func captureAddrs(val reflect.Value, addrs map[uintptr]recursionType) (showAddrs
 }
 
 func innerValue(val reflect.Value, addrs map[uintptr]recursionType) (inner any) {
-
 	var pointerTarget uintptr
 	if addrs != nil {
 		if val.Kind() == reflect.Pointer {
 			pointerTarget = val.Pointer()
 		} else if val.Kind() == reflect.UnsafePointer {
-			pointerTarget = val.UnsafeAddr()
+			// Ensure the value is addressable before accessing UnsafeAddr
+			if val.CanAddr() {
+				pointerTarget = val.UnsafeAddr()
+			} else {
+				pointerTarget = val.Pointer()
+			}
 		}
 
 		if pointerTarget != 0 {
@@ -162,23 +171,18 @@ func innerValue(val reflect.Value, addrs map[uintptr]recursionType) (inner any) 
 		inner = runtime.FuncForPC(val.Pointer()).Name()
 
 	case reflect.Struct:
-		// convert to a map
 		m := map[string]any{}
-
 		val2 := reflect.New(val.Type()).Elem()
 		val2.Set(val)
-
 		for i := 0; i < val.NumField(); i++ {
 			rf := val2.Field(i)
 			rf = reflect.NewAt(rf.Type(), unsafe.Pointer(rf.UnsafeAddr())).Elem()
-
 			m[val.Type().Field(i).Name] = innerValue(rf, addrs)
 		}
 		inner = m
 
 	case reflect.Array, reflect.Slice:
 		a := []any{}
-
 		for i := 0; i < val.Len(); i++ {
 			a = append(a, innerValue(val.Index(i), addrs))
 		}
@@ -237,8 +241,12 @@ func innerValue(val reflect.Value, addrs map[uintptr]recursionType) (inner any) 
 			m[fmt.Sprintf("%v", innerValue(rk, addrs))] = innerValue(rv, addrs)
 		}
 		inner = m
+
 	case reflect.Interface, reflect.Pointer:
 		inner = innerValue(val.Elem(), addrs)
+
+	case reflect.UnsafePointer:
+		inner = fmt.Sprintf("(unsafe.Pointer: %#x)", val.Pointer())
 
 	case reflect.Invalid:
 		// zero value
@@ -316,18 +324,24 @@ func isNil(i any) bool {
 }
 
 func (props loggingProperties) getMessagePrefix(level string) string {
+	id := trimLaneId(props.laneId)
+
 	if props.journeyId != "" {
-		return fmt.Sprintf("%s {%s:%s}", level, props.journeyId, props.laneId)
+		return fmt.Sprintf("%s {%s:%s}", level, props.journeyId, id)
 	} else {
-		return fmt.Sprintf("%s {%s}", level, props.laneId)
+		return fmt.Sprintf("%s {%s}", level, id)
 	}
 }
 
-func makeLaneId() string {
-	id := uuid.New().String()
-	id = id[len(id)-10:]
-
+func trimLaneId(id string) string {
+	if len(id) > 10 {
+		id = id[len(id)-10:]
+	}
 	return id
+}
+
+func makeLaneId() string {
+	return uuid.New().String()
 }
 
 func cleanStack(buf []byte, skipCallers int) (lines []string) {

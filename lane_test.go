@@ -1083,7 +1083,7 @@ func TestLogLane(t *testing.T) {
 	ll := NewLogLane(nil)
 
 	lid := ll.LaneId()
-	if len(lid) != 10 {
+	if len(lid) != 36 {
 		t.Errorf("wrong lane id length %d", len(lid))
 	}
 
@@ -1129,15 +1129,14 @@ func TestLogLaneJourneyId(t *testing.T) {
 	if !strings.Contains(capture, id) {
 		t.Error("did not find outer correlation id")
 	}
-	if !strings.Contains(capture, ll.LaneId()) {
+	if !strings.Contains(capture, trimLaneId(ll.LaneId())) {
 		t.Error("did not find lane correlation id")
 	}
 }
 
 func TestLogLaneJourneyIdDerived(t *testing.T) {
 	ll := NewLogLane(context.Background())
-	id := uuid.New().String()
-	id = id[len(id)-10:]
+	id := trimLaneId(uuid.New().String())
 	ll.SetJourneyId(id)
 
 	ll2 := ll.Derive()
@@ -1156,10 +1155,10 @@ func TestLogLaneJourneyIdDerived(t *testing.T) {
 	if !strings.Contains(capture, id) {
 		t.Error("did not find outer correlation id")
 	}
-	if strings.Contains(capture, ll.LaneId()) {
+	if strings.Contains(capture, trimLaneId(ll.LaneId())) {
 		t.Error("found unexpected correlation id")
 	}
-	if !strings.Contains(capture, ll2.LaneId()) {
+	if !strings.Contains(capture, trimLaneId(ll2.LaneId())) {
 		t.Error("did not find lane correlation id")
 	}
 }
@@ -1495,7 +1494,7 @@ func verifyLogLaneEvents(t *testing.T, ll Lane, expected string, buf bytes.Buffe
 		t.Fatal("missing lane id in context")
 	}
 
-	guid := v.(string)
+	guid := trimLaneId(v.(string))
 	expected = strings.ReplaceAll(expected, "GUID", guid)
 
 	if expected == "" {

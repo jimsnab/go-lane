@@ -195,6 +195,8 @@ type (
 		FatalfInternal(props loggingProperties, format string, args ...any)
 
 		LogStackTrimInternal(props loggingProperties, message string, skippedCallers int)
+
+		OnPanic()
 	}
 
 	loggingProperties struct {

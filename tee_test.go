@@ -753,10 +753,10 @@ func TestLogLaneRetainJourney(t *testing.T) {
 	if !strings.Contains(output, " INFO {journey:") {
 		t.Error("missing journey ID")
 	}
-	if !strings.Contains(output, fmt.Sprintf(":%s} test", nl2.LaneId())) {
+	if !strings.Contains(output, fmt.Sprintf(":%s} test", trimLaneId(nl2.LaneId()))) {
 		t.Error("missing lane ID")
 	}
-	if !strings.Contains(output, fmt.Sprintf(" INFO {%s} server", nl.LaneId())) {
+	if !strings.Contains(output, fmt.Sprintf(" INFO {%s} server", trimLaneId(nl.LaneId()))) {
 		t.Error("missing server lane ID")
 	}
 }
@@ -783,10 +783,10 @@ func TestLogLaneRetainIdsWithStack(t *testing.T) {
 	if !strings.Contains(output, " INFO {journey:") {
 		t.Error("missing journey ID")
 	}
-	if !strings.Contains(output, fmt.Sprintf(":%s} test", nl2.LaneId())) {
+	if !strings.Contains(output, fmt.Sprintf(":%s} test", trimLaneId(nl2.LaneId()))) {
 		t.Error("missing lane ID")
 	}
-	if !strings.Contains(output, fmt.Sprintf(" INFO {%s} server", nl.LaneId())) {
+	if !strings.Contains(output, fmt.Sprintf(" INFO {%s} server", trimLaneId(nl.LaneId()))) {
 		t.Error("missing server lane ID")
 	}
 }
@@ -813,10 +813,10 @@ func TestLogLaneRetainIdsWithStack2(t *testing.T) {
 	if !strings.Contains(output, " INFO {journey:") {
 		t.Error("missing journey ID")
 	}
-	if !strings.Contains(output, fmt.Sprintf(":%s} test", tl2.LaneId())) {
+	if !strings.Contains(output, fmt.Sprintf(":%s} test", trimLaneId(tl2.LaneId()))) {
 		t.Error("missing lane ID")
 	}
-	if !strings.Contains(output, fmt.Sprintf(" INFO {%s} server", tl.LaneId())) {
+	if !strings.Contains(output, fmt.Sprintf(" INFO {%s} server", trimLaneId(tl.LaneId()))) {
 		t.Error("missing server lane ID")
 	}
 }
@@ -844,13 +844,13 @@ func TestLogLaneRetainIdsWithStack3(t *testing.T) {
 	if !strings.Contains(output, " INFO {journey:") {
 		t.Error("missing journey ID")
 	}
-	if !strings.Contains(output, fmt.Sprintf(":%s} test", ll2.LaneId())) {
+	if !strings.Contains(output, fmt.Sprintf(":%s} test", trimLaneId(ll2.LaneId()))) {
 		t.Error("missing lane ID")
 	}
-	if !strings.Contains(output, fmt.Sprintf("STACK {journey:%s} ", ll2.LaneId())) {
+	if !strings.Contains(output, fmt.Sprintf("STACK {journey:%s} ", trimLaneId(ll2.LaneId()))) {
 		t.Error("missing stack")
 	}
-	if !strings.Contains(output, fmt.Sprintf(" INFO {%s} server", ll.LaneId())) {
+	if !strings.Contains(output, fmt.Sprintf(" INFO {%s} server", trimLaneId(ll.LaneId()))) {
 		t.Error("missing server lane ID")
 	}
 
@@ -882,13 +882,13 @@ func TestLogLaneRetainIdsWithStack4(t *testing.T) {
 	if !strings.Contains(output, " INFO {journey:") {
 		t.Error("missing journey ID")
 	}
-	if !strings.Contains(output, fmt.Sprintf(":%s} test", ll2.LaneId())) {
+	if !strings.Contains(output, fmt.Sprintf(":%s} test", trimLaneId(ll2.LaneId()))) {
 		t.Error("missing lane ID")
 	}
-	if strings.Contains(output, fmt.Sprintf("STACK {journey:%s} ", ll2.LaneId())) {
+	if strings.Contains(output, fmt.Sprintf("STACK {journey:%s} ", trimLaneId(ll2.LaneId()))) {
 		t.Error("unexpected stack")
 	}
-	if !strings.Contains(output, fmt.Sprintf(" INFO {%s} server", ll.LaneId())) {
+	if !strings.Contains(output, fmt.Sprintf(" INFO {%s} server", trimLaneId(ll.LaneId()))) {
 		t.Error("missing server lane ID")
 	}
 
@@ -960,7 +960,7 @@ func TestLogLaneRetainIdsWithObjectLog(t *testing.T) {
 	// verify logging obj in null lane was processed by the log lane and IDs were retained
 
 	output := buf.String()
-	if !strings.Contains(output, fmt.Sprintf(`INFO {journey:%s} obj: {"cat":"meow","dog":"bark"}`, nl.LaneId())) {
+	if !strings.Contains(output, fmt.Sprintf(`INFO {journey:%s} obj: {"cat":"meow","dog":"bark"}`, trimLaneId(nl.LaneId()))) {
 		t.Error("not the expected log output")
 	}
 }

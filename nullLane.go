@@ -142,7 +142,7 @@ func (nl *nullLane) FatalObject(message string, obj any) {
 }
 
 func (nl *nullLane) LogStack(message string) {
-	nl.LogStackTrim(message, 1)
+	nl.LogStackTrim(message, 0)
 }
 
 func (nl *nullLane) LogStackTrim(message string, skippedCallers int) {
@@ -346,4 +346,8 @@ func (nl *nullLane) LogStackTrimInternal(props loggingProperties, message string
 	nl.tee(nl.LaneProps(), func(teeProps loggingProperties, li laneInternal) {
 		li.LogStackTrimInternal(teeProps, message, skippedCallers)
 	})
+}
+
+func (nl *nullLane) OnPanic() {
+	nl.onPanic()
 }

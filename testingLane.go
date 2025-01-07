@@ -372,13 +372,11 @@ func (tl *testingLane) WarnObject(message string, obj any) {
 func (tl *testingLane) Error(args ...any) {
 	props := tl.LaneProps()
 	tl.ErrorInternal(props, args...)
-	tl.logTestingLaneStack(props, LogLevelError, 1)
 }
 
 func (tl *testingLane) Errorf(format string, args ...any) {
 	props := tl.LaneProps()
 	tl.ErrorfInternal(props, format, args...)
-	tl.logTestingLaneStack(props, LogLevelError, 1)
 }
 
 func (tl *testingLane) ErrorObject(message string, obj any) {
@@ -458,7 +456,7 @@ func (tl *testingLane) logStack(props loggingProperties, message string, skipped
 }
 
 func (tl *testingLane) LogStack(message string) {
-	tl.LogStackTrim(message, 1)
+	tl.LogStackTrim(message, 0)
 }
 
 func (tl *testingLane) LogStackTrim(message string, skippedCallers int) {
@@ -693,13 +691,13 @@ func (tl *testingLane) WarnfInternal(props loggingProperties, format string, arg
 
 func (tl *testingLane) ErrorInternal(props loggingProperties, args ...any) {
 	tl.recordLaneEvent(props, LogLevelError, "ERROR", nil, args...)
-	tl.logTestingLaneStack(props, LogLevelError, 1)
+	tl.logTestingLaneStack(props, LogLevelError, 0)
 	tl.tee(props, func(teeProps loggingProperties, li laneInternal) { li.ErrorInternal(teeProps, args...) })
 }
 
 func (tl *testingLane) ErrorfInternal(props loggingProperties, format string, args ...any) {
 	tl.recordLaneEvent(props, LogLevelError, "ERROR", &format, args...)
-	tl.logTestingLaneStack(props, LogLevelError, 1)
+	tl.logTestingLaneStack(props, LogLevelError, 0)
 	tl.tee(props, func(teeProps loggingProperties, li laneInternal) { li.ErrorfInternal(teeProps, format, args...) })
 }
 
@@ -728,4 +726,8 @@ func (tl *testingLane) LogStackTrimInternal(props loggingProperties, message str
 	tl.tee(props, func(teeProps loggingProperties, li laneInternal) {
 		li.LogStackTrimInternal(teeProps, message, skippedCallers)
 	})
+}
+
+func (tl *testingLane) OnPanic() {
+	tl.onPanic()
 }

@@ -414,7 +414,7 @@ func (ll *logLane) logStack(props loggingProperties, message string, skipCallers
 }
 
 func (ll *logLane) LogStack(message string) {
-	ll.LogStackTrim(message, 1)
+	ll.LogStackTrim(message, 0)
 }
 
 func (ll *logLane) LogStackTrim(message string, skippedCallers int) {
@@ -724,4 +724,8 @@ func (ll *logLane) LogStackTrimInternal(props loggingProperties, message string,
 	ll.tee(props, func(teeProps loggingProperties, li laneInternal) {
 		li.LogStackTrimInternal(teeProps, message, skippedCallers)
 	})
+}
+
+func (ll *logLane) OnPanic() {
+	ll.onPanic()
 }

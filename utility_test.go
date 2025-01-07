@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"unsafe"
 )
 
 type (
@@ -277,6 +278,10 @@ func TestLogObjectValueTypes(t *testing.T) {
 	l.InfoObject("complex128", complex(128, 0.128))
 	l.InfoObject("string", "hello")
 
+	var example int = 42
+	ptr := unsafe.Pointer(&example)
+	l.InfoObject("unsafe.Pointer", ptr)
+
 	testExpectedStdout(t, &buf, []string{
 		"bool: true",
 		"int: 1",
@@ -295,6 +300,7 @@ func TestLogObjectValueTypes(t *testing.T) {
 		`complex64: "(64+0.64i)"`,
 		`complex128: "(128+0.128i)"`,
 		`string: "hello"`,
+		fmt.Sprintf(`unsafe.Pointer: "(unsafe.Pointer: %p)"`, ptr),
 	})
 }
 
