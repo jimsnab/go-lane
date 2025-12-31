@@ -1,3 +1,12 @@
+// Package lane provides a context-aware logging and correlation library.
+//
+// A "lane" is a context that integrates logging, combining Go's `log` package with its `context`.
+// A lane is designed to be passed into all functions, serving as a regular `context` for tasks like cancellation,
+// while also replacing `log` for logging purposes.
+//
+// The logging interface offers various tools for detailed diagnostics, including correlation IDs, stack traces,
+// easy logging of structs (even private fields), log capturing for test verification, recording structural
+// differences, and more.
 package lane
 
 import (
@@ -7,21 +16,30 @@ import (
 )
 
 const (
+	// LogLevelTrace is for checkpoint information.
 	LogLevelTrace LaneLogLevel = iota
+	// LogLevelDebug is for diagnostic information.
 	LogLevelDebug
+	// LogLevelInfo is for healthy state information.
 	LogLevelInfo
+	// LogLevelWarn is for recoverable errors.
 	LogLevelWarn
+	// LogLevelError is for application faults.
 	LogLevelError
+	// LogLevelFatal is for termination conditions.
 	LogLevelFatal
 	logLevelPreFatal
+	// LogLevelStack is a special level for stack trace logging.
 	LogLevelStack
 )
 
 const logLevelMax = LogLevelStack + 1
 
 type (
+	// LaneLogLevel indicates the severity of a log message.
 	LaneLogLevel int
 
+	// OptionalContext is an alias for context.Context. It is used to indicate that nil is an acceptable value.
 	OptionalContext context.Context
 
 	Lane interface {
@@ -165,6 +183,7 @@ type (
 		Parent() Lane
 	}
 
+	// Panic is a function type used for replacing the default panic behavior, primarily for testing.
 	Panic func()
 
 	// functions for internal implementation

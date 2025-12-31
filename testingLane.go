@@ -12,6 +12,7 @@ import (
 )
 
 type (
+	// LaneEvent represents a single log event captured by TestingLane.
 	LaneEvent struct {
 		Id      string
 		Level   string
@@ -41,6 +42,7 @@ type (
 		tl *testingLane
 	}
 
+	// TestingLane is a lane that captures log messages for verification in tests.
 	TestingLane interface {
 		Lane
 		laneInternal
@@ -83,6 +85,7 @@ type (
 
 const testing_lane_id testingLaneId = "testing_lane"
 
+// NewTestingLane creates a new lane that captures log messages for testing purposes.
 func NewTestingLane(ctx OptionalContext) TestingLane {
 	return deriveTestingLane(ctx, nil, []Lane{})
 }

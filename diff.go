@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Generates a display string describing the differences between [a] and [b],
+// DiffObjects generates a display string describing the differences between [a] and [b],
 // or an empty string if no differences exist.
 func DiffObjects(a, b any) string {
 	a2 := CaptureObject(a)

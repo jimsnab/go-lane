@@ -12,6 +12,7 @@ type (
 	}
 )
 
+// NewDiskLane creates a new lane that logs to a file.
 func NewDiskLane(ctx OptionalContext, logFile string) (l Lane, err error) {
 
 	createFn := func(parentLane Lane) (newLane Lane, ll LogLane, writer *log.Logger, err error) {

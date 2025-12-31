@@ -3,10 +3,19 @@ package lane
 import "sync"
 
 type (
+	// LaneMetadata is the interface for managing metadata associated with a lane.
+	// Metadata consists of key-value pairs that provide additional context.
+	// These pairs are often used by structured logging lanes (like OpenSearch)
+	// to include extra fields in the log records.
 	LaneMetadata interface {
+		// SetOwner links the metadata to the owning lane.
 		SetOwner(l Lane)
+		// SetMetadata sets a key-value pair in the metadata.
+		// This value will be propagated to any attached tee lanes.
 		SetMetadata(key, value string)
+		// GetMetadata retrieves the value for a given key.
 		GetMetadata(key string) string
+		// MetadataMap returns a copy of all metadata.
 		MetadataMap() map[string]string
 	}
 
@@ -18,12 +27,12 @@ type (
 	}
 )
 
-// Used in lane object creation to link the metadata interface to the owning lane
+// SetOwner is used in lane object creation to link the metadata interface to the owning lane
 func (ms *MetadataStore) SetOwner(l Lane) {
 	ms.l = l
 }
 
-// Sets the lane's metadata value, overwriting a prior value if one was set
+// SetMetadata sets the lane's metadata value, overwriting a prior value if one was set
 func (ms *MetadataStore) SetMetadata(key, value string) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
@@ -39,7 +48,7 @@ func (ms *MetadataStore) SetMetadata(key, value string) {
 	}
 }
 
-// Retrieves the lane's metadata value if it is set
+// GetMetadata retrieves the lane's metadata value if it is set
 func (ms *MetadataStore) GetMetadata(key string) string {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
@@ -47,7 +56,7 @@ func (ms *MetadataStore) GetMetadata(key string) string {
 	return ms.metadata[key]
 }
 
-// Returns a copy of the metadata map
+// MetadataMap returns a copy of the metadata map
 func (ms *MetadataStore) MetadataMap() map[string]string {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()

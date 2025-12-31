@@ -25,7 +25,7 @@ const (
 	recursionWasRendered
 )
 
-// Logs an entire object.
+// LogObject logs an entire object to the lane.
 func LogObject(l Lane, level LaneLogLevel, message string, obj any) {
 	li := l.(laneInternal)
 
@@ -266,7 +266,9 @@ func innerValue(val reflect.Value, addrs map[uintptr]recursionType) (inner any) 
 	return
 }
 
-// Converts an arbitrary object into a JSON-renderable object.
+// CaptureObject converts an arbitrary object into a JSON-renderable object.
+// Unlike standard json.Marshal, this function includes private fields and
+// follows pointers to capture the full state of the object.
 func CaptureObject(obj any) (v any) {
 	addrs := map[uintptr]recursionType{}
 	val := reflect.ValueOf(obj)

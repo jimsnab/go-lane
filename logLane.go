@@ -14,10 +14,16 @@ import (
 )
 
 type (
+	// LogLane is the interface for a lane that logs to an output.
 	LogLane interface {
 		Lane
 		laneInternal
+		// AddCR controls whether a carriage return is added to log messages.
 		AddCR(shouldAdd bool) (prior bool)
+		// SetFlagsMask sets the flags mask for the underlying logger.
+		// This allows controlling the output format of the standard Go logger,
+		// such as including or excluding date, time, and file location.
+		// See the constants in the standard "log" package (e.g., log.Ldate, log.Ltime).
 		SetFlagsMask(mask int) (prior int)
 	}
 
@@ -45,6 +51,7 @@ type (
 		ll    *logLane
 	}
 
+	// LaneIdKey is the type used for context keys related to lane IDs.
 	LaneIdKey string
 
 	// Callback for creating a new derived context. If the context returned by
@@ -52,17 +59,17 @@ type (
 	// contain the context value key laneIdKey with value id.
 	deriveContext func(newCtx context.Context, id string) context.Context
 
-	// Callback invoked when a derived context is created. It is used by log
+	// OnCreateLane is a callback invoked when a derived context is created. It is used by log
 	// lane types that embed a log lane. It allows the outer lane type to
 	// make its lane-specific object. The callback must provide newLane and ll.
 	// Returning non-nil writer is optional.
 	OnCreateLane func(parentLane Lane) (newLane Lane, ll LogLane, writer *log.Logger, err error)
 )
 
-// Context key for the lane ID
+// LogLaneIdKey is the context key for the lane ID.
 const LogLaneIdKey = LaneIdKey("log_lane_id")
 
-// Context key for the parent lane ID
+// ParentLaneIdKey is the context key for the parent lane ID.
 const ParentLaneIdKey = LaneIdKey("parent_lane_id")
 
 func isLogCrLf() bool {
@@ -72,12 +79,13 @@ func isLogCrLf() bool {
 	return buf.Bytes()[0] == '\r'
 }
 
+// NewLogLane creates a new lane that logs to the standard Go log output.
 func NewLogLane(ctx OptionalContext) Lane {
 	l, _ := deriveLogLane(nil, ctx, nil, createLogLane)
 	return l
 }
 
-// Initializes a LogLane for a more sophisticated lane type that embeds a log lane.
+// NewEmbeddedLogLane initializes a LogLane for a more sophisticated lane type that embeds a log lane.
 //
 //   - onCreate creates a new instance of the outer lane and provides the embedded log lane.
 //   - startingCtx provides an optional context instance, to start a lane from a pre-existing
@@ -103,7 +111,9 @@ func createLogLane(parentLane Lane) (newLane Lane, ll LogLane, writer *log.Logge
 	return
 }
 
-// Function to allocate a log lane for lane types that embed a log lane
+// AllocEmbeddedLogLane is used by extended lane types (such as DiskLane or OpenSearchLane)
+// to allocate the embedded LogLane instance. This is typically called within the
+// OnCreateLane callback passed to NewEmbeddedLogLane.
 func AllocEmbeddedLogLane() LogLane {
 	llZero := logLane{}
 	llZero.SetOwner(&llZero)
@@ -195,7 +205,8 @@ func (ll *logLane) AddCR(shouldAdd bool) (prior bool) {
 	return
 }
 
-// For cases where \r\n line endings are required (ex: vscode terminal)
+// NewLogLaneWithCR creates a new lane that logs to the standard Go log output, ensuring \r\n line endings.
+// This is useful for terminals that require CR/LF, such as the VS Code terminal.
 func NewLogLaneWithCR(ctx OptionalContext) Lane {
 	ll, _ := deriveLogLane(nil, ctx, nil, createLogLane)
 	if !isLogCrLf() {

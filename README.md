@@ -169,6 +169,25 @@ Assume street addresses a and b are different. The log output will look somethin
 
 Only the changed fields are logged. Notice Texas is not shown in the change.
 
+## Metadata
+
+Lanes support attaching metadata, which are key-value pairs that provide additional context
+to the lane.
+
+```go
+l.SetMetadata("request_id", "12345")
+l.SetMetadata("user", "jdoe")
+```
+
+Metadata is particularly useful when using structured logging lanes, such as
+[go-lane-opensearch](https://github.com/jimsnab/go-lane-opensearch). In such cases, the
+metadata pairs are included as fields in the structured log document (e.g., JSON), allowing
+for powerful filtering and searching in the log aggregation system.
+
+Metadata is propagated to "tee" lanes. For example, if you have a `LogLane` (stdout) and
+tee it to an `OpenSearchLane`, setting metadata on the main lane will ensure it appears
+in the OpenSearch documents.
+
 # Types of Lanes
 
 - `NewLogLane` log messages go to the standard Go `log` infrastructure. Access the `log`

@@ -32,6 +32,7 @@ type (
 	nullContext string
 )
 
+// NewNullLane creates a new lane that discards all log output.
 func NewNullLane(ctx OptionalContext) Lane {
 	return deriveNullLane(nil, ctx, []Lane{}, nil)
 }
