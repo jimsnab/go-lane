@@ -3,7 +3,6 @@ package lane
 import (
 	"log"
 	"os"
-	"syscall"
 )
 
 type (
@@ -36,12 +35,11 @@ func createDiskLane(logFile string, parentLane Lane) (newLane Lane, ll LogLane, 
 
 		dl.f = f
 	} else {
-		var newFd int
-		newFd, err = syscall.Dup(int(pdl.f.Fd()))
+		var f2 *os.File
+		f2, err = dupFile(pdl.f)
 		if err != nil {
 			return
 		}
-		f2 := os.NewFile(uintptr(newFd), pdl.f.Name())
 		dl.f = f2
 	}
 	writer = log.New(dl.f, "", 0)
