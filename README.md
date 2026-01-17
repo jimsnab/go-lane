@@ -207,8 +207,48 @@ in the OpenSearch documents.
 - `NewNullLane` creates a lane that does not log but still has the context functionality.
   Logging is similar to `log.SetOutput(io.Discard)` - fatal errors still terminate the app.
 
+- `NewFilterLane` wraps any lane and filters log messages based on a predicate function. This
+  is useful for routing specific messages to different destinations, such as audit logs.
+
 Check out other projects, such as [go-lane-gin](https://github.com/jimsnab/go-lane-gin) or
 [go-lane-opensearch](https://github.com/jimsnab/go-lane-opensearch) for additional lane types.
+
+# Filtering Messages
+
+Filter lanes allow you to route specific log messages to different destinations based on content or severity.
+
+```go
+mainLane := lane.NewLogLane(nil)
+
+// Audit log - only [AUDIT] messages
+lane.AddFilterTee(mainLane, lane.NewDiskLane(nil, "/var/log/audit.log"), `^\[AUDIT\]`)
+
+// Debug log - everything (no filter)
+lane.AddFilterTee(mainLane, lane.NewDiskLane(nil, "/var/log/debug.log"), "")
+```
+
+### Advanced: Custom Filters
+
+For complex logic, use `NewFilterLane` with a custom function. The filter receives the lane (for accessing journey ID, metadata, etc.), log level, and message:
+
+```go
+// Route based on metadata (e.g., tenant ID)
+tenantFilter := func(lane lane.Lane, level lane.LaneLogLevel, msg string) bool {
+    return lane.GetMetadata("tenant") == "acme-corp"
+}
+tenantLane := lane.NewFilterLane(tenantDiskLane, tenantFilter)
+
+// Complex: errors with [CRITICAL] OR any warning, but only for specific journey
+criticalFilter := func(lane lane.Lane, level lane.LaneLogLevel, msg string) bool {
+    isTargetJourney := strings.HasPrefix(lane.JourneyId(), "prod-")
+    if level == lane.LogLevelError && strings.HasPrefix(msg, "[CRITICAL]") {
+        return isTargetJourney
+    }
+    return level == lane.LogLevelWarn && isTargetJourney
+}
+filteredLane := lane.NewFilterLane(diskLane, criticalFilter)
+mainLane.AddTee(filteredLane)
+```
 
 # Stack Trace
 
