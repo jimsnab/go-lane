@@ -62,6 +62,11 @@ type (
 		// Controls the log filtering
 		SetLogLevel(newLevel LaneLogLevel) (priorLevel LaneLogLevel)
 
+		// Returns true if the specified log level will produce output.
+		// Note: This only checks the log level threshold, not message-based filters.
+		// For FilterLane, messages may still be filtered even if this returns true.
+		IsLevelEnabled(level LaneLogLevel) bool
+
 		// Sets a lane metadata value (even if the lane type does not log it)
 		SetMetadata(key, val string)
 

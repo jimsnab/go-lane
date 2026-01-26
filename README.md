@@ -47,6 +47,7 @@ Lane interface {
 	LaneId() string
 	SetJourneyId(id string)
 	SetLogLevel(newLevel LaneLogLevel) (priorLevel LaneLogLevel)
+	IsLevelEnabled(level LaneLogLevel) bool
 
 	Trace(args ...any)
 	Tracef(format string, args ...any)

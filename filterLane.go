@@ -145,6 +145,10 @@ func (fl *filterLane) SetLogLevel(newLevel LaneLogLevel) (priorLevel LaneLogLeve
 	return fl.wrapped.SetLogLevel(newLevel)
 }
 
+func (fl *filterLane) IsLevelEnabled(level LaneLogLevel) bool {
+	return fl.wrapped.IsLevelEnabled(level)
+}
+
 func (fl *filterLane) SetMetadata(key, val string) {
 	fl.wrapped.SetMetadata(key, val)
 }

@@ -147,6 +147,131 @@ func TestLaneSetLevel(t *testing.T) {
 	}
 }
 
+func TestLaneIsEnabled(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+
+	// Set log level to Info
+	tl.SetLogLevel(LogLevelInfo)
+
+	// Levels at or above Info should be enabled
+	if !tl.IsLevelEnabled(LogLevelInfo) {
+		t.Error("Info level should be enabled when log level is Info")
+	}
+	if !tl.IsLevelEnabled(LogLevelWarn) {
+		t.Error("Warn level should be enabled when log level is Info")
+	}
+	if !tl.IsLevelEnabled(LogLevelError) {
+		t.Error("Error level should be enabled when log level is Info")
+	}
+	if !tl.IsLevelEnabled(LogLevelFatal) {
+		t.Error("Fatal level should be enabled when log level is Info")
+	}
+
+	// Levels below Info should not be enabled
+	if tl.IsLevelEnabled(LogLevelDebug) {
+		t.Error("Debug level should not be enabled when log level is Info")
+	}
+	if tl.IsLevelEnabled(LogLevelTrace) {
+		t.Error("Trace level should not be enabled when log level is Info")
+	}
+
+	// Test with Fatal level (most restrictive)
+	tl.SetLogLevel(LogLevelFatal)
+	if !tl.IsLevelEnabled(LogLevelFatal) {
+		t.Error("Fatal level should be enabled when log level is Fatal")
+	}
+	if tl.IsLevelEnabled(LogLevelError) {
+		t.Error("Error level should not be enabled when log level is Fatal")
+	}
+	if tl.IsLevelEnabled(LogLevelTrace) {
+		t.Error("Trace level should not be enabled when log level is Fatal")
+	}
+
+	// Test with Trace level (least restrictive)
+	tl.SetLogLevel(LogLevelTrace)
+	if !tl.IsLevelEnabled(LogLevelTrace) {
+		t.Error("Trace level should be enabled when log level is Trace")
+	}
+	if !tl.IsLevelEnabled(LogLevelDebug) {
+		t.Error("Debug level should be enabled when log level is Trace")
+	}
+	if !tl.IsLevelEnabled(LogLevelInfo) {
+		t.Error("Info level should be enabled when log level is Trace")
+	}
+	if !tl.IsLevelEnabled(LogLevelFatal) {
+		t.Error("Fatal level should be enabled when log level is Trace")
+	}
+}
+
+func TestLaneIsEnabledLogLane(t *testing.T) {
+	l := NewLogLane(context.Background())
+
+	// Set log level to Warn
+	l.SetLogLevel(LogLevelWarn)
+
+	// Warn and above should be enabled
+	if !l.IsLevelEnabled(LogLevelWarn) {
+		t.Error("Warn level should be enabled when log level is Warn")
+	}
+	if !l.IsLevelEnabled(LogLevelError) {
+		t.Error("Error level should be enabled when log level is Warn")
+	}
+	if !l.IsLevelEnabled(LogLevelFatal) {
+		t.Error("Fatal level should be enabled when log level is Warn")
+	}
+
+	// Below Warn should not be enabled
+	if l.IsLevelEnabled(LogLevelInfo) {
+		t.Error("Info level should not be enabled when log level is Warn")
+	}
+	if l.IsLevelEnabled(LogLevelDebug) {
+		t.Error("Debug level should not be enabled when log level is Warn")
+	}
+	if l.IsLevelEnabled(LogLevelTrace) {
+		t.Error("Trace level should not be enabled when log level is Warn")
+	}
+}
+
+func TestLaneIsEnabledNullLane(t *testing.T) {
+	nl := NewNullLane(context.Background())
+
+	// NullLane should always return false for IsEnabled
+	nl.SetLogLevel(LogLevelTrace)
+	if nl.IsLevelEnabled(LogLevelTrace) {
+		t.Error("NullLane should not enable any log level")
+	}
+	if nl.IsLevelEnabled(LogLevelFatal) {
+		t.Error("NullLane should not enable any log level")
+	}
+}
+
+func TestLaneIsEnabledInheritance(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+	tl.SetLogLevel(LogLevelError)
+
+	// Derived lane should inherit parent's log level
+	tl2 := tl.Derive()
+
+	if !tl2.IsLevelEnabled(LogLevelError) {
+		t.Error("Derived lane should have Error level enabled")
+	}
+	if !tl2.IsLevelEnabled(LogLevelFatal) {
+		t.Error("Derived lane should have Fatal level enabled")
+	}
+	if tl2.IsLevelEnabled(LogLevelWarn) {
+		t.Error("Derived lane should not have Warn level enabled")
+	}
+
+	// Changing derived lane's level shouldn't affect parent
+	tl2.SetLogLevel(LogLevelDebug)
+	if tl.IsLevelEnabled(LogLevelWarn) {
+		t.Error("Parent lane level should not be affected by child change")
+	}
+	if !tl2.IsLevelEnabled(LogLevelDebug) {
+		t.Error("Derived lane should have Debug level enabled after change")
+	}
+}
+
 func TestLaneInheritLevel(t *testing.T) {
 	tl := NewTestingLane(context.Background())
 
@@ -2921,6 +3046,78 @@ func TestDiskLaneBadPath(t *testing.T) {
 	_, err := NewDiskLane(nil, "")
 	if err == nil {
 		t.Fatal("make test.log")
+	}
+}
+
+func TestDiskLaneIsEnabled(t *testing.T) {
+	os.Remove("test.log")
+
+	dl, err := NewDiskLane(context.Background(), "test.log")
+	if err != nil {
+		t.Fatal("make test.log")
+	}
+	defer dl.Close()
+	defer os.Remove("test.log")
+
+	// Test IsEnabled with various log levels
+	dl.SetLogLevel(LogLevelWarn)
+
+	// Warn and above should be enabled
+	if !dl.IsLevelEnabled(LogLevelWarn) {
+		t.Error("Warn level should be enabled when log level is Warn")
+	}
+	if !dl.IsLevelEnabled(LogLevelError) {
+		t.Error("Error level should be enabled when log level is Warn")
+	}
+	if !dl.IsLevelEnabled(LogLevelFatal) {
+		t.Error("Fatal level should be enabled when log level is Warn")
+	}
+
+	// Below Warn should not be enabled
+	if dl.IsLevelEnabled(LogLevelInfo) {
+		t.Error("Info level should not be enabled when log level is Warn")
+	}
+	if dl.IsLevelEnabled(LogLevelDebug) {
+		t.Error("Debug level should not be enabled when log level is Warn")
+	}
+	if dl.IsLevelEnabled(LogLevelTrace) {
+		t.Error("Trace level should not be enabled when log level is Warn")
+	}
+
+	// Change level to Debug and verify
+	dl.SetLogLevel(LogLevelDebug)
+
+	if !dl.IsLevelEnabled(LogLevelDebug) {
+		t.Error("Debug level should be enabled when log level is Debug")
+	}
+	if !dl.IsLevelEnabled(LogLevelInfo) {
+		t.Error("Info level should be enabled when log level is Debug")
+	}
+	if dl.IsLevelEnabled(LogLevelTrace) {
+		t.Error("Trace level should not be enabled when log level is Debug")
+	}
+
+	// Test with derived lane
+	dl2 := dl.Derive()
+	defer dl2.Close()
+
+	if !dl2.IsLevelEnabled(LogLevelDebug) {
+		t.Error("Derived lane should inherit Debug level")
+	}
+
+	// Change derived lane level independently
+	dl2.SetLogLevel(LogLevelError)
+
+	if !dl2.IsLevelEnabled(LogLevelError) {
+		t.Error("Derived lane should have Error level enabled")
+	}
+	if dl2.IsLevelEnabled(LogLevelWarn) {
+		t.Error("Derived lane should not have Warn level enabled")
+	}
+
+	// Parent should not be affected
+	if !dl.IsLevelEnabled(LogLevelDebug) {
+		t.Error("Parent lane should still have Debug level enabled")
 	}
 }
 

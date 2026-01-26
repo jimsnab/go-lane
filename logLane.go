@@ -242,6 +242,10 @@ func (ll *logLane) SetLogLevel(newLevel LaneLogLevel) (priorLevel LaneLogLevel) 
 	return
 }
 
+func (ll *logLane) IsLevelEnabled(level LaneLogLevel) bool {
+	return atomic.LoadInt32(&ll.level) <= int32(level)
+}
+
 func (ll *logLane) shouldLog(level LaneLogLevel) bool {
 	if atomic.LoadInt32(&ll.level) <= int32(level) {
 		// the log wrapper is exposed to the client, so ensure changes

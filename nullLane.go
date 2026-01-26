@@ -72,6 +72,10 @@ func (nl *nullLane) SetLogLevel(newLevel LaneLogLevel) (priorLevel LaneLogLevel)
 	return
 }
 
+func (nl *nullLane) IsLevelEnabled(level LaneLogLevel) bool {
+	return false
+}
+
 func (nl *nullLane) tee(props loggingProperties, logger teeHandler) {
 	nl.mu.Lock()
 	defer nl.mu.Unlock()

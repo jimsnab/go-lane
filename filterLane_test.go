@@ -409,6 +409,90 @@ func TestFilterLaneLogLevel(t *testing.T) {
 	}
 }
 
+// Test IsEnabled with FilterLane
+func TestFilterLaneIsEnabled(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+	fl := NewFilterLane(tl, nil)
+
+	// Set log level to Info
+	fl.SetLogLevel(LogLevelInfo)
+
+	// IsEnabled should delegate to wrapped lane
+	if !fl.IsLevelEnabled(LogLevelInfo) {
+		t.Error("Info level should be enabled when log level is Info")
+	}
+	if !fl.IsLevelEnabled(LogLevelWarn) {
+		t.Error("Warn level should be enabled when log level is Info")
+	}
+	if !fl.IsLevelEnabled(LogLevelError) {
+		t.Error("Error level should be enabled when log level is Info")
+	}
+	if !fl.IsLevelEnabled(LogLevelFatal) {
+		t.Error("Fatal level should be enabled when log level is Info")
+	}
+
+	// Levels below Info should not be enabled
+	if fl.IsLevelEnabled(LogLevelDebug) {
+		t.Error("Debug level should not be enabled when log level is Info")
+	}
+	if fl.IsLevelEnabled(LogLevelTrace) {
+		t.Error("Trace level should not be enabled when log level is Info")
+	}
+
+	// Change log level to Error
+	fl.SetLogLevel(LogLevelError)
+
+	if !fl.IsLevelEnabled(LogLevelError) {
+		t.Error("Error level should be enabled when log level is Error")
+	}
+	if !fl.IsLevelEnabled(LogLevelFatal) {
+		t.Error("Fatal level should be enabled when log level is Error")
+	}
+	if fl.IsLevelEnabled(LogLevelWarn) {
+		t.Error("Warn level should not be enabled when log level is Error")
+	}
+	if fl.IsLevelEnabled(LogLevelInfo) {
+		t.Error("Info level should not be enabled when log level is Error")
+	}
+}
+
+// Test IsEnabled with derived FilterLane
+func TestFilterLaneIsEnabledDerived(t *testing.T) {
+	tl := NewTestingLane(context.Background())
+	fl := NewFilterLane(tl, nil)
+	fl.SetLogLevel(LogLevelWarn)
+
+	// Derive a new filter lane
+	fl2 := fl.Derive()
+
+	// Derived lane should inherit parent's log level
+	if !fl2.IsLevelEnabled(LogLevelWarn) {
+		t.Error("Derived lane should have Warn level enabled")
+	}
+	if !fl2.IsLevelEnabled(LogLevelError) {
+		t.Error("Derived lane should have Error level enabled")
+	}
+	if fl2.IsLevelEnabled(LogLevelInfo) {
+		t.Error("Derived lane should not have Info level enabled")
+	}
+
+	// Change derived lane's level
+	fl2.SetLogLevel(LogLevelDebug)
+
+	// Parent should not be affected
+	if fl.IsLevelEnabled(LogLevelDebug) {
+		t.Error("Parent lane should not be affected by derived lane change")
+	}
+	if !fl.IsLevelEnabled(LogLevelWarn) {
+		t.Error("Parent lane should still have Warn level enabled")
+	}
+
+	// Derived should have new level
+	if !fl2.IsLevelEnabled(LogLevelDebug) {
+		t.Error("Derived lane should have Debug level enabled after change")
+	}
+}
+
 // Test derivation maintains filter
 func TestFilterLaneDerive(t *testing.T) {
 	tl := NewTestingLane(context.Background())

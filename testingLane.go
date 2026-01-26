@@ -138,6 +138,12 @@ func (tl *testingLane) SetLogLevel(newLevel LaneLogLevel) (priorLevel LaneLogLev
 	return
 }
 
+func (tl *testingLane) IsLevelEnabled(level LaneLogLevel) bool {
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+	return tl.level <= level
+}
+
 func (tl *testingLane) VerifyEvents(eventList []*LaneEvent) bool {
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
