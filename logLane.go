@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"runtime"
 	"strings"
 	"sync"
@@ -450,6 +451,14 @@ func (ll *logLane) Logger() *log.Logger {
 	return ll.wlog
 }
 
+func (ll *logLane) SlogLogger() *slog.Logger {
+	return slog.New(ll.SlogHandler())
+}
+
+func (ll *logLane) SlogHandler() slog.Handler {
+	return NewSlogHandler(ll.outer)
+}
+
 func (ll *logLane) Close() {
 }
 
@@ -586,15 +595,11 @@ func (ll *logLane) EnableStackTrace(level LaneLogLevel, enable bool) bool {
 }
 
 func (ll *logLane) AddTee(l Lane) {
-	ll.mu.Lock()
-	for _, t := range ll.tees {
-		if t.LaneId() == l.LaneId() {
-			// can't create a cyclical tee
-			panic("tee points to itself")
-		}
-	}
-	ll.tees = append(ll.tees, l)
-	ll.mu.Unlock()
+	addTee(ll.outer, l, func() {
+		ll.mu.Lock()
+		ll.tees = append(ll.tees, l)
+		ll.mu.Unlock()
+	})
 }
 
 func (ll *logLane) RemoveTee(l Lane) {
@@ -715,11 +720,11 @@ func (ll *logLane) ErrorfInternal(props loggingProperties, format string, args .
 }
 
 func (ll *logLane) PreFatalInternal(props loggingProperties, args ...any) {
-	ll.printMsg(ll.LaneProps(), LogLevelFatal, "FATAL", func(teeProps loggingProperties, li laneInternal) { li.PreFatalInternal(teeProps, args...) }, args...)
+	ll.printMsg(props, LogLevelFatal, "FATAL", func(teeProps loggingProperties, li laneInternal) { li.PreFatalInternal(teeProps, args...) }, args...)
 }
 
 func (ll *logLane) PreFatalfInternal(props loggingProperties, format string, args ...any) {
-	ll.printfMsg(ll.LaneProps(), LogLevelFatal, "FATAL", func(teeProps loggingProperties, li laneInternal) { li.PreFatalfInternal(teeProps, format, args...) }, format, args...)
+	ll.printfMsg(props, LogLevelFatal, "FATAL", func(teeProps loggingProperties, li laneInternal) { li.PreFatalfInternal(teeProps, format, args...) }, format, args...)
 }
 
 func (ll *logLane) FatalInternal(props loggingProperties, args ...any) {

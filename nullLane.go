@@ -3,6 +3,7 @@ package lane
 import (
 	"context"
 	"log"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -176,6 +177,14 @@ func (nl *nullLane) Logger() *log.Logger {
 	return nl.wlog
 }
 
+func (nl *nullLane) SlogLogger() *slog.Logger {
+	return slog.New(nl.SlogHandler())
+}
+
+func (nl *nullLane) SlogHandler() slog.Handler {
+	return NewSlogHandler(nl)
+}
+
 func (nl *nullLane) Close() {
 }
 
@@ -257,9 +266,11 @@ func (nl *nullLane) JourneyId() string {
 }
 
 func (nl *nullLane) AddTee(l Lane) {
-	nl.mu.Lock()
-	nl.tees = append(nl.tees, l)
-	nl.mu.Unlock()
+	addTee(nl, l, func() {
+		nl.mu.Lock()
+		nl.tees = append(nl.tees, l)
+		nl.mu.Unlock()
+	})
 }
 
 func (nl *nullLane) RemoveTee(l Lane) {

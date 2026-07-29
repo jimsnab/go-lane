@@ -118,6 +118,19 @@ Each log level offers:
 
 The object logger converts an object to JSON, including private fields.
 
+## Structured Logging
+
+`SlogLogger()` returns a standard `slog.Logger` that routes records through the lane. It preserves
+`slog` attributes, groups, and custom levels while applying the lane's level filtering, tees, and filters.
+Lane and journey IDs, along with lane metadata, are added to every structured record.
+
+```go
+logger := l.SlogLogger().With("component", "api")
+logger.InfoContext(l, "request complete", "status", 200)
+```
+
+Use `SlogHandler()` when an integration accepts an `slog.Handler`.
+
 A correlation ID is provided via `LaneId()`, which is automatically included in logged messages.
 
 When spawning goroutines, pass `l` (the lane) around. Use one of the `Derive` functions if a new

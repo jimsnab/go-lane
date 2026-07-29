@@ -12,6 +12,7 @@ package lane
 import (
 	"context"
 	"log"
+	"log/slog"
 	"time"
 )
 
@@ -133,6 +134,10 @@ type (
 
 		// Exposes access to the underlying log object.
 		Logger() *log.Logger
+		// SlogLogger returns a structured logger that routes records through this lane.
+		SlogLogger() *slog.Logger
+		// SlogHandler returns the structured logging handler used by SlogLogger.
+		SlogHandler() slog.Handler
 		Close()
 
 		// Makes a lane for a child activity that needs its own correlation ID. For example a server will derive a new lane for each client connection.

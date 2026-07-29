@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"runtime"
 	"strings"
 	"sync"
@@ -486,6 +487,14 @@ func (tl *testingLane) Logger() *log.Logger {
 	return tl.tlog
 }
 
+func (tl *testingLane) SlogLogger() *slog.Logger {
+	return slog.New(tl.SlogHandler())
+}
+
+func (tl *testingLane) SlogHandler() slog.Handler {
+	return NewSlogHandler(tl)
+}
+
 func (tl *testingLane) Close() {
 }
 
@@ -611,9 +620,11 @@ func (tl *testingLane) JourneyId() string {
 }
 
 func (tl *testingLane) AddTee(l Lane) {
-	tl.mu.Lock()
-	tl.tees = append(tl.tees, l)
-	tl.mu.Unlock()
+	addTee(tl, l, func() {
+		tl.mu.Lock()
+		tl.tees = append(tl.tees, l)
+		tl.mu.Unlock()
+	})
 }
 
 func (tl *testingLane) RemoveTee(l Lane) {

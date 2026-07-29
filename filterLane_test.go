@@ -941,11 +941,29 @@ func TestFilterLaneFatalFiltering(t *testing.T) {
 	})
 
 	fl.Fatal("drop this")
-	if panicCalled {
-		t.Error("Fatal should not trigger panic when filtered")
+	if !panicCalled {
+		t.Error("Fatal should trigger panic when filtered")
 	}
 	if tl.Contains("drop this") {
 		t.Error("Filtered fatal should not appear")
+	}
+
+	panicCalled = false
+	fl.Fatalf("drop %s", "formatted")
+	if !panicCalled {
+		t.Error("Fatalf should trigger panic when filtered")
+	}
+	if tl.Contains("drop formatted") {
+		t.Error("Filtered formatted fatal should not appear")
+	}
+
+	panicCalled = false
+	fl.FatalObject("drop object", struct{ Value string }{"value"})
+	if !panicCalled {
+		t.Error("FatalObject should trigger panic when filtered")
+	}
+	if tl.Contains("drop object") {
+		t.Error("Filtered object fatal should not appear")
 	}
 }
 

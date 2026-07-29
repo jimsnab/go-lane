@@ -115,6 +115,47 @@ func TestTeeLogDerive(t *testing.T) {
 	}
 }
 
+func TestTeeLogRetainsIdsForFatal(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() { log.SetOutput(os.Stderr) }()
+
+	source := NewLogLane(nil)
+	source.SetLogLevel(LogLevelStack) // only the tee should emit the event
+	source.SetJourneyId("journey")
+	target := NewLogLane(nil)
+	source.AddTee(target)
+
+	source.PreFatal("fatal")
+
+	if !strings.Contains(buf.String(), fmt.Sprintf("FATAL {journey:%s} fatal", trimLaneId(source.LaneId()))) {
+		t.Errorf("fatal tee did not retain source IDs: %s", buf.String())
+	}
+}
+
+func TestAddTeeRejectsIndirectCycles(t *testing.T) {
+	constructors := []func() Lane{
+		func() Lane { return NewLogLane(nil) },
+		func() Lane { return NewNullLane(nil) },
+		func() Lane { return NewTestingLane(nil) },
+	}
+
+	for _, newLane := range constructors {
+		source := newLane()
+		target := newLane()
+		source.AddTee(target)
+
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Error("expected indirect tee cycle to panic")
+				}
+			}()
+			target.AddTee(source)
+		}()
+	}
+}
+
 func TestTeeLogDouble(t *testing.T) {
 	tl1 := NewTestingLane(context.Background())
 	tl2 := NewTestingLane(context.Background())

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"regexp"
 	"time"
 )
@@ -283,20 +284,26 @@ func (fl *filterLane) Fatal(args ...any) {
 	msg := sprint(args...)
 	if fl.filter(fl.wrapped, LogLevelFatal, msg) {
 		fl.wrapped.Fatal(args...)
+		return
 	}
+	fl.OnPanic()
 }
 
 func (fl *filterLane) Fatalf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	if fl.filter(fl.wrapped, LogLevelFatal, msg) {
 		fl.wrapped.Fatalf(format, args...)
+		return
 	}
+	fl.OnPanic()
 }
 
 func (fl *filterLane) FatalObject(message string, obj any) {
 	if fl.filter(fl.wrapped, LogLevelFatal, message) {
 		fl.wrapped.FatalObject(message, obj)
+		return
 	}
+	fl.OnPanic()
 }
 
 func (fl *filterLane) LogStack(message string) {
@@ -319,6 +326,14 @@ func (fl *filterLane) SetLengthConstraint(maxLength int) int {
 
 func (fl *filterLane) Logger() *log.Logger {
 	return fl.wrapped.Logger()
+}
+
+func (fl *filterLane) SlogLogger() *slog.Logger {
+	return slog.New(fl.SlogHandler())
+}
+
+func (fl *filterLane) SlogHandler() slog.Handler {
+	return NewSlogHandler(fl)
 }
 
 func (fl *filterLane) Close() {
