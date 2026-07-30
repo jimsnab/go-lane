@@ -45,7 +45,10 @@ func (h *slogLaneHandler) Handle(ctx context.Context, record slog.Record) error 
 	defer h.writer.mu.Unlock()
 
 	h.writer.level = laneLogLevel(record.Level)
-	handler := slog.NewTextHandler(h.writer, &slog.HandlerOptions{Level: slog.LevelDebug}).WithAttrs(laneSlogAttrs(h.lane))
+	handler := slog.NewTextHandler(h.writer, &slog.HandlerOptions{
+		Level:       slog.LevelDebug,
+		ReplaceAttr: removeLaneDuplicateSlogAttrs,
+	}).WithAttrs(laneSlogAttrs(h.lane))
 	for _, change := range h.changes {
 		if change.attrs != nil {
 			handler = handler.WithAttrs(change.attrs)
@@ -114,7 +117,7 @@ func laneLogLevel(level slog.Level) LaneLogLevel {
 }
 
 func laneSlogAttrs(l Lane) []slog.Attr {
-	attrs := []slog.Attr{slog.String("lane_id", l.LaneId())}
+	attrs := make([]slog.Attr, 0)
 	if journeyID := l.JourneyId(); journeyID != "" {
 		attrs = append(attrs, slog.String("journey_id", journeyID))
 	}
@@ -132,4 +135,13 @@ func laneSlogAttrs(l Lane) []slog.Attr {
 	}
 
 	return attrs
+}
+
+func removeLaneDuplicateSlogAttrs(_ []string, attr slog.Attr) slog.Attr {
+	switch attr.Key {
+	case slog.TimeKey, slog.LevelKey:
+		return slog.Attr{}
+	default:
+		return attr
+	}
 }
