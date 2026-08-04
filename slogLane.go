@@ -3,7 +3,6 @@ package lane
 import (
 	"context"
 	"log/slog"
-	"sort"
 	"strings"
 	"sync"
 )
@@ -45,10 +44,10 @@ func (h *slogLaneHandler) Handle(ctx context.Context, record slog.Record) error 
 	defer h.writer.mu.Unlock()
 
 	h.writer.level = laneLogLevel(record.Level)
-	handler := slog.NewTextHandler(h.writer, &slog.HandlerOptions{
+	var handler slog.Handler = slog.NewTextHandler(h.writer, &slog.HandlerOptions{
 		Level:       slog.LevelDebug,
 		ReplaceAttr: removeLaneDuplicateSlogAttrs,
-	}).WithAttrs(laneSlogAttrs(h.lane))
+	})
 	for _, change := range h.changes {
 		if change.attrs != nil {
 			handler = handler.WithAttrs(change.attrs)
@@ -114,27 +113,6 @@ func laneLogLevel(level slog.Level) LaneLogLevel {
 	default:
 		return LogLevelError
 	}
-}
-
-func laneSlogAttrs(l Lane) []slog.Attr {
-	attrs := make([]slog.Attr, 0)
-	if journeyID := l.JourneyId(); journeyID != "" {
-		attrs = append(attrs, slog.String("journey_id", journeyID))
-	}
-
-	if metadata, ok := l.(LaneMetadata); ok {
-		metadataMap := metadata.MetadataMap()
-		keys := make([]string, 0, len(metadataMap))
-		for key := range metadataMap {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			attrs = append(attrs, slog.String(key, metadataMap[key]))
-		}
-	}
-
-	return attrs
 }
 
 func removeLaneDuplicateSlogAttrs(_ []string, attr slog.Attr) slog.Attr {

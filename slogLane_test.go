@@ -19,8 +19,6 @@ func TestSlogLoggerRoutesRecordsThroughLane(t *testing.T) {
 	for _, expected := range []string{
 		"INFO\t",
 		"msg=\"request complete\"",
-		"journey_id=journey",
-		"tenant=acme",
 		"request=42",
 		"http.status=200",
 	} {
@@ -28,7 +26,7 @@ func TestSlogLoggerRoutesRecordsThroughLane(t *testing.T) {
 			t.Errorf("expected %q in %s", expected, events)
 		}
 	}
-	for _, unexpected := range []string{"time=", "level=", "lane_id="} {
+	for _, unexpected := range []string{"time=", "level=", "lane_id=", "journey_id=", "tenant="} {
 		if strings.Contains(events, unexpected) {
 			t.Errorf("did not expect %q in %s", unexpected, events)
 		}
